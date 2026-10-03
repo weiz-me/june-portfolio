@@ -11,7 +11,7 @@ Files in `assets/`. A missing file shows a labeled placeholder.
 | `flyer_1.jpg` … `flyer_7.jpg` | ✅ Seminar flyers (rendered from the original PDFs) |
 | `event_1.jpg`, `event_2.jpg` | ✅ Community fest booth, health seminar (from the 2026 progress report) |
 | `digital_*.jpg` | ✅ WeChat Video / WeChat articles / RedNote screenshots (from the progress report) |
-| `headshot.jpg` | ⬜ Half-body photo, business casual, simple background |
+| `headshot.jpg` | ✅ Headshot (from LinkedIn profile photo) |
 | `rebrand_before.jpg` / `rebrand_after.jpg` | ⬜ Storefront signage before / after the Rendr rebrand |
 | `Hui_Jun_Wen_Resume.pdf` | ✅ Final résumé |
 
