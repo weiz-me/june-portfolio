@@ -4,17 +4,15 @@ Static site (HTML/CSS/JS, no build step). Open `index.html`, or deploy the folde
 
 ## Images
 
-Drop files into `assets/` with these exact names. Any missing file shows a labeled placeholder.
+Files in `assets/`. A missing file shows a labeled placeholder.
 
-| File | What goes there |
+| File | Status |
 |---|---|
-| `headshot.jpg` | Half-body photo, business casual, simple background |
-| `flyer_1.png` … `flyer_7.png` | Seminar flyers (portrait, ~3:4) |
-| `event_1.jpg` | Physician seminar (shown largest) |
-| `event_2.jpg` | UnitedHealthcare / VNS Health collaboration |
-| `event_3.jpg` | Senior center event |
-| `event_4.jpg`, `event_5.jpg` | Other community events |
-| `rebrand_before.jpg` / `rebrand_after.jpg` | Storefront signage before / after the Rendr rebrand |
-| `Hui_Jun_Wen_Resume.pdf` | Current résumé |
+| `flyer_1.jpg` … `flyer_7.jpg` | ✅ Seminar flyers (rendered from the original PDFs) |
+| `event_1.jpg`, `event_2.jpg` | ✅ Community fest booth, health seminar (from the 2026 progress report) |
+| `digital_*.jpg` | ✅ WeChat Video / WeChat articles / RedNote screenshots (from the progress report) |
+| `headshot.jpg` | ⬜ Half-body photo, business casual, simple background |
+| `rebrand_before.jpg` / `rebrand_after.jpg` | ⬜ Storefront signage before / after the Rendr rebrand |
+| `Hui_Jun_Wen_Resume.pdf` | ⬜ Current résumé |
 
-Content source: résumé + portfolio notes from the ChatGPT conversation "解释CRM概念".
+Content sources: résumé + portfolio notes from the ChatGPT conversation "解释CRM概念"; 2026 Marketing Monthly Progress Report (Jan–Jun).
