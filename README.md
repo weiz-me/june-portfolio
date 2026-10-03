@@ -13,6 +13,6 @@ Files in `assets/`. A missing file shows a labeled placeholder.
 | `digital_*.jpg` | ✅ WeChat Video / WeChat articles / RedNote screenshots (from the progress report) |
 | `headshot.jpg` | ⬜ Half-body photo, business casual, simple background |
 | `rebrand_before.jpg` / `rebrand_after.jpg` | ⬜ Storefront signage before / after the Rendr rebrand |
-| `Hui_Jun_Wen_Resume.pdf` | ⬜ Current résumé |
+| `Hui_Jun_Wen_Resume.pdf` | ✅ Final résumé |
 
 Content sources: résumé + portfolio notes from the ChatGPT conversation "解释CRM概念"; 2026 Marketing Monthly Progress Report (Jan–Jun).
