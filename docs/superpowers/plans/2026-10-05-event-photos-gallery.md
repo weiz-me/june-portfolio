@@ -30,6 +30,7 @@ Every task's requirements implicitly include this section.
 **Images**
 - `sips` can read HEIC/JFIF but **cannot write WebP**. All output is **JPEG**.
 - Web size: **1400px long edge, quality 68** (≈267 KB measured). Thumbnails: **480px, quality 70** (≈60 KB measured).
+- `sips -Z` **upscales** sources smaller than the target (verified on sips-316: 64x48 at `-Z 4000` returns 4000x3000). Always clamp the target to the source's long edge so small images pass through untouched.
 - `assets/` total must stay **under 30 MB**, no single file over **500 KB**.
 - Reading a file's bytes hydrates it from the cloud. Never read bytes in bulk outside `tools/hydrate.py`.
 
@@ -396,9 +397,11 @@ class TestImages(unittest.TestCase):
         self.assertEqual(got["bytes"], os.path.getsize(out))
 
     def test_never_upscales(self):
+        # sips -Z on its own WOULD upscale this to 4000x3000; to_jpeg clamps.
         out = os.path.join(self.tmp, "big.jpg")
         got = images.to_jpeg(self.jpg, out, 4000, 70)
         self.assertEqual((got["w"], got["h"]), (64, 48))
+        self.assertEqual(images.dimensions(out), (64, 48))
 
     def test_converts_heic_to_jpeg(self):
         out = os.path.join(self.tmp, "from_heic.jpg")
@@ -484,15 +487,22 @@ def dimensions(path):
 def to_jpeg(src, dst, max_px, quality):
     """Convert src to a JPEG at dst, fitting the long edge within max_px.
 
-    sips -Z only ever shrinks, so small originals are left at native size.
+    Measured on sips-316: `-Z` UPSCALES a smaller source -- a 64x48 image
+    at `-Z 4000` comes back 4000x3000 and 190 KB. That is pure waste, and
+    the archive does contain small screenshots and JFIF captures alongside
+    the 5472x3648 Canon originals. So clamp the target to the source's own
+    long edge and let small images through untouched.
+
     Returns {"w", "h", "bytes"}.
     """
     parent = os.path.dirname(dst)
     if parent:
         os.makedirs(parent, exist_ok=True)
+    src_w, src_h = dimensions(src)
+    target = min(max_px, max(src_w, src_h))
     _sips(["-s", "format", "jpeg",
            "-s", "formatOptions", str(quality),
-           "-Z", str(max_px),
+           "-Z", str(target),
            src, "--out", dst])
     w, h = dimensions(dst)
     return {"w": w, "h": h, "bytes": os.path.getsize(dst)}
