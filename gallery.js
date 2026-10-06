@@ -50,19 +50,32 @@
     }
     flat.forEach(({ event, photo }, i) => {
       const fig = el("figure", "gal-item");
+      // A real <button> gets keyboard focus, Enter and Space for free, and
+      // needs no extra ARIA to be operable -- a bare <img> with a click
+      // handler is mouse-only. The accessible name goes on the button, not
+      // the image, so it isn't announced twice.
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "gal-item-btn";
+      const caption = photo.caption || event.title;
+      btn.setAttribute("aria-label",
+        caption === event.title
+          ? `Open photo: ${event.title}`
+          : `Open photo: ${caption} — ${event.title}`);
       const img = document.createElement("img");
       img.src = photo.thumb || photo.src;
       img.width = photo.w || 0;
       img.height = photo.h || 0;
       img.loading = "lazy";
       img.decoding = "async";
-      img.alt = photo.caption || event.title;
-      img.addEventListener("click", () => lightbox.open(flat, i));
+      img.alt = "";
+      btn.append(img);
+      btn.addEventListener("click", () => lightbox.open(flat, i, btn));
       const cap = el("figcaption");
       cap.append(el("span", "gal-title", event.title));
       cap.append(el("span", "gal-meta",
         [event.date, event.category_label].filter(Boolean).join(" · ")));
-      fig.append(img, cap);
+      fig.append(btn, cap);
       host.append(fig);
     });
   }
@@ -85,6 +98,7 @@
 
     let items = [];
     let at = 0;
+    let opener = null;
     const show = (i) => {
       at = (i + items.length) % items.length;
       const { event, photo } = items[at];
@@ -93,7 +107,14 @@
       cap.textContent = [event.title, event.date, photo.caption]
         .filter(Boolean).join(" · ");
     };
-    const hide = () => { box.hidden = true; document.body.style.overflow = ""; };
+    const hide = () => {
+      box.hidden = true;
+      document.body.style.overflow = "";
+      // Return focus to whatever opened the lightbox, so a keyboard user
+      // lands back where they were instead of at the top of the document.
+      if (opener && typeof opener.focus === "function") opener.focus();
+      opener = null;
+    };
 
     close.addEventListener("click", hide);
     prev.addEventListener("click", () => show(at - 1));
@@ -107,11 +128,15 @@
     });
 
     return {
-      open(list, i) {
+      open(list, i, triggerEl) {
         items = list;
+        opener = triggerEl || (document.activeElement || null);
         box.hidden = false;
         document.body.style.overflow = "hidden";
         show(i);
+        // Move focus into the lightbox so keyboard users land somewhere
+        // usable instead of behind the now-covered page.
+        if (typeof close.focus === "function") close.focus();
       },
     };
   }
