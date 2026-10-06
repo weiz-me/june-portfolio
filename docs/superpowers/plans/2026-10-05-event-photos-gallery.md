@@ -478,7 +478,13 @@ def dimensions(path):
         key, _, value = line.partition(":")
         key = key.strip()
         if key in ("pixelWidth", "pixelHeight"):
-            found[key] = int(value.strip())
+            value = value.strip()
+            # sips exits 0 on a non-image and prints "pixelWidth: <nil>", so
+            # without this guard int() raises a bare ValueError and callers
+            # told to catch SipsError never see it.
+            if value == "<nil>":
+                raise SipsError("no pixel dimensions in sips output for %s" % path)
+            found[key] = int(value)
     if "pixelWidth" not in found or "pixelHeight" not in found:
         raise SipsError("no pixel dimensions in sips output for %s" % path)
     return (found["pixelWidth"], found["pixelHeight"])
