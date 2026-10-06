@@ -44,7 +44,12 @@ def dimensions(path):
             value = value.strip()
             if value == "<nil>":
                 raise SipsError("no pixel dimensions in sips output for %s" % path)
-            found[key] = int(value)
+            try:
+                # sips may report dimensions as floats (e.g., PDF pages: 959.760)
+                # Parse as float first, then round to int to avoid truncation.
+                found[key] = int(round(float(value)))
+            except ValueError:
+                raise SipsError("unparseable dimension '%s' in sips output for %s" % (value, path))
     if "pixelWidth" not in found or "pixelHeight" not in found:
         raise SipsError("no pixel dimensions in sips output for %s" % path)
     return (found["pixelWidth"], found["pixelHeight"])
