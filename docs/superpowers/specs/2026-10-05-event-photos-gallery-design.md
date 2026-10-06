@@ -22,7 +22,7 @@ Root: `~/Library/CloudStorage/OneDrive2-RendrPhysicians/Event_photos/`
 | Logical size | 45.4 GB (avg 5.1 MB) |
 | Typical original | Canon EOS 6D, 5472×3648 |
 | **Downloaded locally** | **0.0%** — all cloud placeholders (`st_blocks == 0`) |
-| Redundant copies | 2,866 files = **10.1 GB** |
+| Redundant copies | 2,917 files = **10.12 GB** global; **7.67 GB** of it inside catch-all folders and safely scriptable |
 | Unique events | **147** |
 | Duplicate event folders | 23 |
 

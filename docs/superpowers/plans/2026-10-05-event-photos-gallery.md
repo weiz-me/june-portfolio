@@ -2042,7 +2042,9 @@ print('unmatched          ', len(a['unmatched']))
 print('removable          %d files, %.1f GB' % (a['removable_files'], a['removable_bytes']/1024**3))
 "
 ```
-Expected: roughly 2,866 removable files and 10.1 GB. The independently measured figure was 2,866 / 10.1 GB — a large gap means the sibling matching is wrong, so inspect `a["unmatched"]` before trusting the result.
+Expected: roughly **2,548 removable files and 7.67 GB**.
+
+Do not confuse this with the archive's *global* name+size redundancy, which is larger — 2,917 files / 10.12 GB. The extra 369 files / 2.45 GB are duplicates that live **outside** catch-all folders (the clearest case being `Centerlight Health Fair`, stored twice under two different date spellings, neither copy in a catch-all). Those are real duplicates but they are out of scope here: deciding which copy to keep needs a human, so `naming.find_conflicts` surfaces them instead. A materially lower number than 2,548 means the sibling matching is wrong — inspect `a["unmatched"]` before trusting the result.
 
 - [ ] **Step 6: Commit**
 
