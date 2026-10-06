@@ -120,3 +120,31 @@ def write_csv(analysis, path):
                 writer.writerow([row["rel"], "keep-unique", row["bytes"], ""])
                 written += 1
     return written
+
+
+def global_redundancy(rows):
+    """Archive-wide name+size redundancy, independent of catch-all/sibling
+    relationships.
+
+    analyze()'s full/partial/removable_* figures are scoped to catch-all
+    folders paired with a sibling event -- that scoping is what makes it
+    safe for cleanup.sh to act on automatically. This function instead asks
+    a simpler, broader question: across the *entire* archive, how many
+    files share an exact (name, size) with another file somewhere else?
+    That total is necessarily >= the catch-all-scoped figure, because every
+    catch-all duplicate is by construction a (name, size) match too. The
+    gap between the two is duplicate files living outside any catch-all,
+    where picking which copy to keep is a judgment call for a human, so
+    they are reported but never queued for an automatic move.
+    """
+    groups = {}
+    for row in rows:
+        groups.setdefault(file_key(row), []).append(row)
+    files = 0
+    total_bytes = 0
+    for (name, size), group in groups.items():
+        if len(group) > 1:
+            extra = len(group) - 1
+            files += extra
+            total_bytes += extra * size
+    return {"files": files, "bytes": total_bytes}
