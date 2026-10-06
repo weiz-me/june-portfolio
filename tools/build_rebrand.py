@@ -4,6 +4,7 @@ Only the chosen pairs are read, so this hydrates about 2 files per pair
 instead of touching the 45 GB archive.
 """
 import argparse
+import html
 import json
 import os
 import re
@@ -26,10 +27,18 @@ def pick_photo(folder):
     Some "before" entries in `_Original Legacy Rendr Photo` are loose
     files, not folders -- the address lives in the filename and there is
     no sibling folder to list. If `folder` is itself a file, use it
-    directly rather than trying to os.listdir() it.
+    directly rather than trying to os.listdir() it -- but only if it is
+    actually an image. The archive has 12 PDFs mixed in among these loose
+    files, and `sips` happily reads and converts a PDF (it renders the
+    page as a raster image, no error, exit 0) -- confirmed against a real
+    malformed-but-recoverable PDF in this environment. Without this
+    extension check, a PDF whose filename parses as an address would be
+    silently published as a genuine before photo.
     """
     if os.path.isfile(folder):
-        return folder
+        if folder.lower().endswith(IMAGE_EXTS):
+            return folder
+        return None
     best = None
     best_size = -1
     if not os.path.isdir(folder):
@@ -87,11 +96,18 @@ def _select(pairs, limit, only):
 def build(archive, out_dir, assets_dir, limit=5, only=None):
     """Match every pair, publish either the first `limit` of them, or --
     when `only` is a non-empty list of label slugs -- exactly those pairs
-    in the order given (see `_select`)."""
+    in the order given (see `_select`).
+
+    `assets_dir` must itself be a repo-relative path (e.g. "assets/rebrand",
+    the CLI's own default) -- not an absolute filesystem path. The
+    repo-relative value recorded in `published`/the JSON is derived
+    directly from it (normalized to forward slashes), never hardcoded, so
+    it stays correct for whatever `--assets` the caller actually passes.
+    """
     pairs = addresses.match_pairs(archive)
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(assets_dir, exist_ok=True)
-    assets_rel = "assets/rebrand"
+    assets_rel = os.path.normpath(assets_dir).replace(os.sep, "/").rstrip("/")
 
     selected, unresolved = _select(pairs, limit, only)
 
@@ -114,10 +130,24 @@ def build(archive, out_dir, assets_dir, limit=5, only=None):
             })
             continue
         slug = slugify(pair["label"])
+        written = []
         try:
             before_rel, info = _side(before_src, assets_dir, assets_rel, slug, "before")
+            written.append(os.path.join(assets_dir, "%s-before.jpg" % slug))
             after_rel, _ = _side(after_src, assets_dir, assets_rel, slug, "after")
+            written.append(os.path.join(assets_dir, "%s-after.jpg" % slug))
         except images.SipsError as exc:
+            # Keep the pair atomic: a failure partway through must not
+            # leave an orphan file referenced by nothing. Task 15's
+            # asset verifier cross-checks in both directions (every
+            # referenced file exists, and every file on disk is
+            # referenced), so an orphan here would fail that check much
+            # later, far from this cause.
+            for path in written:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
             skipped.append({"slug": slug, "label": pair["label"], "why": str(exc)})
             continue
         published.append({
@@ -137,10 +167,20 @@ def build(archive, out_dir, assets_dir, limit=5, only=None):
 
 def html_snippet(published):
     """Markup for the index.html component. Every pair ships as real markup so
-    the component works with JavaScript disabled; JS only toggles .active."""
+    the component works with JavaScript disabled; JS only toggles .active.
+
+    Labels come straight from folder names on disk and are not under our
+    control -- the real archive has entries with "&" and "(" ")" (e.g.
+    "Dr. Daniel Yeoun & lab - 26-19 Francis Lewis Blvd", "Dr. Henry Chen
+    - 757 60th Street (Exterior Window)"). A raw "&" is invalid HTML that
+    browsers only forgive by accident, so every label is escaped with
+    html.escape(..., quote=True) before being placed in either an
+    attribute or element-text position.
+    """
     blocks = []
     for i, p in enumerate(published):
         cls = "ba-pair active" if i == 0 else "ba-pair"
+        label = html.escape(p["label"], quote=True)
         blocks.append(
             '            <div class="%s" data-ba-pair data-label="%s">\n'
             '              <figure><img src="%s" alt="Signage at %s before the Rendr rebrand" '
@@ -148,8 +188,8 @@ def html_snippet(published):
             '              <figure><img src="%s" alt="Rendr signage at %s after the rebrand" '
             'data-slot="After: %s" loading="lazy"><figcaption>After</figcaption></figure>\n'
             '            </div>'
-            % (cls, p["label"], p["before"], p["label"], p["label"],
-               p["after"], p["label"], p["label"])
+            % (cls, label, p["before"], label, label,
+               p["after"], label, label)
         )
     return "\n".join(blocks)
 
