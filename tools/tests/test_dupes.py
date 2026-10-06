@@ -103,6 +103,32 @@ class TestAnalyze(fixtures.ArchiveFixture, unittest.TestCase):
         self.assertIn("George Hall, MD - 2251 86th St", unmatched_events)
 
 
+class TestDuplicateEventKeys(fixtures.ArchiveFixture, unittest.TestCase):
+    def rows(self):
+        return list(scan.walk(self.archive_root))
+
+    def test_a_mirrored_catchall_is_in_the_set_an_orphan_is_not(self):
+        orphan = os.path.join(self.archive_root, "Event Photos", "2022 Events",
+                              "2022", "9999 Orphan Event")
+        os.makedirs(orphan)
+        fixtures.make_seed_image(os.path.join(orphan, "a.jpg"), "jpg")
+
+        result = dupes.analyze(self.rows())
+        keys = dupes.duplicate_event_keys(result)
+
+        self.assertIn(("Event Photos", "2022 Events", "1023 Rendr Dinner"), keys)
+        self.assertNotIn(("Event Photos", "2022 Events", "9999 Orphan Event"), keys)
+
+    def test_partial_overlap_event_is_in_the_set(self):
+        extra_dir = os.path.join(self.archive_root, "Event Photos", "2022 Events",
+                                 "2022", "1023 Rendr Dinner")
+        fixtures.make_seed_image(os.path.join(extra_dir, "UNIQUE_9999.jpg"), "jpg")
+        result = dupes.analyze(self.rows())
+        self.assertIn("1023 Rendr Dinner", [p["event"] for p in result["partial"]])
+        keys = dupes.duplicate_event_keys(result)
+        self.assertIn(("Event Photos", "2022 Events", "1023 Rendr Dinner"), keys)
+
+
 class TestWriteCsv(fixtures.ArchiveFixture, unittest.TestCase):
     def setUp(self):
         fixtures.ArchiveFixture.setUp(self)

@@ -39,12 +39,15 @@ def _skip_reason(ext):
 def build(archive, event_ids, thumb_dir, html_path):
     wanted = set(event_ids)
     events = eventdata.collect_events(list(scan.walk(archive)))
-    # Catch-all folders are byte-identical mirrors of a sibling event
-    # (manifests.py calls this "the subset June actually cares about").
-    # Thumbnailing the mirror too would just duplicate the same photos
-    # under a second entry, so it is excluded here even if its id was
-    # explicitly passed in.
-    chosen = [e for e in events if e["id"] in wanted and not e["catchall"]]
+    # build() is downstream of a human's explicit pick (via --events or a
+    # ticked manifest row) and has no business second-guessing which events
+    # exist. Earlier this filtered out every event with catchall=True, on
+    # the theory that catch-all folders are always duplicate mirrors -- but
+    # that conflated "sits in a folder named in scan.CATCHALLS" with "is a
+    # verified duplicate" (dupes.analyze() and manifests.py draw that
+    # distinction correctly; thumbs.py should not redraw it here). Honor
+    # whatever ids are given.
+    chosen = [e for e in events if e["id"] in wanted]
     os.makedirs(thumb_dir, exist_ok=True)
 
     payload = []

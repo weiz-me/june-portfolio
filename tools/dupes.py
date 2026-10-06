@@ -122,6 +122,31 @@ def write_csv(analysis, path):
     return written
 
 
+def duplicate_event_keys(analysis):
+    """(top, year, event) identities analyze() proved are duplicates of a
+    sibling folder elsewhere in the archive -- every "full" catch-all entry,
+    plus the event identity of every "partial" one.
+
+    "unmatched" catch-all folders are deliberately excluded: they sit inside
+    a folder named in scan.CATCHALLS (like "2024 Events1" or "2025 Events1"),
+    but analyze() could not find a sibling anywhere in the archive whose
+    files they mirror, so they hold real, distinct content -- not a
+    duplicate of anything. "Sits inside a catch-all-named folder" and "is a
+    duplicate" are different questions; this answers the second one.
+
+    Note: a catch-all folder's (top, year, event) is indistinguishable from
+    its non-catchall sibling's own identity -- that's exactly why
+    group_events() keys on all four of (top, year, event, catchall). A
+    caller matching events against this set must also check the event's own
+    `catchall` flag, or it will wrongly swallow the legitimate original too.
+    """
+    keys = set()
+    for entry in analysis["full"] + analysis["partial"]:
+        top = entry["rows"][0]["top"]
+        keys.add((top, entry["year"], entry["event"]))
+    return keys
+
+
 def global_redundancy(rows):
     """Archive-wide name+size redundancy, independent of catch-all/sibling
     relationships.

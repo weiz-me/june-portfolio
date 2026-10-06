@@ -20,8 +20,20 @@ class TestThumbs(fixtures.ArchiveFixture, unittest.TestCase):
         fixtures.cleanup(self.work)
 
     def ids_for(self, *needles):
+        # Exclude catch-all mirrors: collect_events() returns one record per
+        # (top, year, event, catchall) group, so a non-catchall event that is
+        # also byte-mirrored into a catch-all folder (as the fixture's
+        # "1023 Rendr Dinner" deliberately is, to exercise dupes.py) produces
+        # two distinct ids with the same title. Every production caller
+        # (manifests.py) only ever hands build() ids for verified-unique
+        # events -- the manifest never lists a verified catch-all mirror as
+        # a row to tick -- so real event_ids passed to thumbs.build() never
+        # include one. Matching that convention here, same as test_hydrate.py
+        # does for this identical fixture quirk, rather than the brief's
+        # original unfiltered version, which picked up both ids for "Rendr
+        # Dinner" and inflated thumbs/events 2x.
         return [e["id"] for e in self.events
-                if any(n in e["title"] for n in needles)]
+                if any(n in e["title"] for n in needles) and not e["catchall"]]
 
     def test_writes_one_thumbnail_per_photo(self):
         ids = self.ids_for("Rendr Dinner")
@@ -83,6 +95,20 @@ class TestThumbs(fixtures.ArchiveFixture, unittest.TestCase):
         self.assertEqual(result["thumbs"], 0)
         self.assertEqual(len(result["skipped"]), 1)
 
+    def test_build_honors_an_explicitly_passed_catchall_id(self):
+        # build() sits downstream of a human's explicit pick (--events or a
+        # ticked manifest row) and must not silently drop an event just
+        # because collect_events() happened to flag it catchall=True.
+        # Whether a catch-all folder is a verified duplicate is a question
+        # for dupes.py/manifests.py to answer upstream, before an id ever
+        # reaches here -- not one for build() to re-litigate.
+        catchall_id = next(e["id"] for e in self.events
+                           if "Rendr Dinner" in e["title"] and e["catchall"])
+        result = thumbs.build(self.archive_root, [catchall_id], self.thumb_dir, self.html)
+        self.assertEqual(result["events"], 1)
+        self.assertEqual(result["thumbs"], 3)
+        self.assertEqual(result["skipped"], [])
+
     def test_skips_non_image_extensions_without_reaching_images_thumb(self):
         # Real event folders hold .mov/.zip/.dng/.tif/.mp4 alongside photos.
         # These must be filtered out by extension before any sips call, so
@@ -98,7 +124,8 @@ class TestThumbs(fixtures.ArchiveFixture, unittest.TestCase):
                 fh.write(content)
 
         events = eventdata.collect_events(list(scan.walk(self.archive_root)))
-        ids = [e["id"] for e in events if "Rendr Dinner" in e["title"]]
+        ids = [e["id"] for e in events
+               if "Rendr Dinner" in e["title"] and not e["catchall"]]
 
         real_thumb = images.thumb
         calls = []

@@ -11,8 +11,24 @@ from tools import classify, dupes, eventdata, naming, scan
 GB = 1024.0 ** 3
 
 
-def write_events_manifest(events, analysis, conflicts, path, global_dupes=None,
-                          empty_months=None):
+def is_removed_duplicate(event, duplicate_keys):
+    """True only for the catch-all copy that dupes.analyze() proved mirrors
+    a sibling event folder elsewhere in the archive.
+
+    A catch-all folder's (top, year, event) is indistinguishable from its
+    non-catchall sibling's own identity -- analyze() only tells the two
+    apart via the `catchall` flag -- so that flag has to be checked here
+    too, or this would also swallow the legitimate original. A catch-all
+    folder that `duplicate_keys` does NOT cover (dupes.analyze() calls this
+    "unmatched") is never treated as a duplicate here either: it has no
+    sibling anywhere in the archive, so its photos are real and distinct,
+    merely filed inside a folder that happens to be named in scan.CATCHALLS.
+    """
+    return event["catchall"] and (event["top"], event["year"], event["event"]) in duplicate_keys
+
+
+def write_events_manifest(events, analysis, conflicts, duplicate_keys, path,
+                          global_dupes=None, empty_months=None):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     lines = []
     lines.append("# Event manifest\n")
@@ -20,8 +36,10 @@ def write_events_manifest(events, analysis, conflicts, path, global_dupes=None,
     lines.append("`python3 -m tools.hydrate --events <id> <id> ...`\n")
     # `events` includes one record per catch-all mirror folder too (it needs
     # those to compute per-folder photo/byte counts), so the unique-event
-    # count June actually cares about is the non-catchall subset.
-    unique_events = [e for e in events if not e["catchall"]]
+    # count June actually cares about excludes only the folders proven to be
+    # duplicates -- not every folder merely sitting inside a catch-all-named
+    # directory. See is_removed_duplicate().
+    unique_events = [e for e in events if not is_removed_duplicate(e, duplicate_keys)]
     unique_empty = [e for e in unique_events if e["photos"] == 0]
     lines.append("- %d unique events (%d with photos, %d empty folders)"
                  % (len(unique_events), len(unique_events) - len(unique_empty),
@@ -51,7 +69,8 @@ def write_events_manifest(events, analysis, conflicts, path, global_dupes=None,
                 lines.append("  - `%s`" % p)
         lines.append("")
 
-    empties = [e for e in events if e["photos"] == 0 and not e["catchall"]]
+    empties = [e for e in events
+               if e["photos"] == 0 and not is_removed_duplicate(e, duplicate_keys)]
     if empties:
         lines.append("## Empty folders\n")
         lines.append("%d event folders exist but hold no photos:\n" % len(empties))
@@ -70,7 +89,7 @@ def write_events_manifest(events, analysis, conflicts, path, global_dupes=None,
 
     by_category = {}
     for e in events:
-        if e["catchall"]:
+        if is_removed_duplicate(e, duplicate_keys):
             continue
         by_category.setdefault(e["category"], []).append(e)
 
@@ -105,16 +124,17 @@ def write_events_manifest(events, analysis, conflicts, path, global_dupes=None,
         fh.write("\n".join(lines) + "\n")
 
 
-def write_rename_plan(events, path):
+def write_rename_plan(events, duplicate_keys, path):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    kept = [e for e in events if not is_removed_duplicate(e, duplicate_keys)]
     with open(path, "w", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(["current_path", "current_name", "proposed_name",
                          "photos", "category"])
-        for e in events:
+        for e in kept:
             writer.writerow([e["dir"], e["event"], e["proposed"],
                              e["photos"], e["category"]])
-    return len(events)
+    return len(kept)
 
 
 _HEADER = """#!/usr/bin/env bash
@@ -263,24 +283,25 @@ def main(argv=None):
     events = eventdata.collect_events(
         rows, extra_dirs=eventdata.find_empty_event_dirs(args.archive))
     empty_months = eventdata.find_empty_month_dirs(args.archive)
+    duplicate_keys = dupes.duplicate_event_keys(analysis)
     conflicts = naming.find_conflicts([
         {"name": e["event"], "iso": e["iso"], "path": e["dir"]}
-        for e in events if not e["catchall"]
+        for e in events if not is_removed_duplicate(e, duplicate_keys)
     ])
-    write_events_manifest(events, analysis, conflicts,
+    write_events_manifest(events, analysis, conflicts, duplicate_keys,
                           os.path.join(out, "events-manifest.md"),
                           global_dupes=global_dupes, empty_months=empty_months)
-    write_rename_plan(events, os.path.join(out, "rename-plan.csv"))
+    write_rename_plan(events, duplicate_keys, os.path.join(out, "rename-plan.csv"))
     moves = write_cleanup(analysis, args.archive,
                           os.path.join(out, "cleanup.sh"),
                           os.path.join(out, "undo.sh"), args.stamp)
 
-    empties = len([e for e in events if e["photos"] == 0])
+    kept_events = [e for e in events if not is_removed_duplicate(e, duplicate_keys)]
+    empties = len([e for e in kept_events if e["photos"] == 0])
     print("files        %d (%.1f GB)" % (inv_stats["files"], inv_stats["bytes"] / GB))
     print("downloaded   %.1f%%" % (100.0 * inv_stats["hydrated"] / max(inv_stats["files"], 1)))
     print("events       %d (%d empty folders, %d empty month folders)"
-          % (len([e for e in events if not e["catchall"]]), empties,
-             len(empty_months)))
+          % (len(kept_events), empties, len(empty_months)))
     print("duplicates   scriptable: %d files, %.2f GB  |  global: %d files, %.2f GB"
           % (analysis["removable_files"], analysis["removable_bytes"] / GB,
              global_dupes["files"], global_dupes["bytes"] / GB))

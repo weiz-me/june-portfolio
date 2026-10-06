@@ -14,6 +14,7 @@ class TestManifests(fixtures.ArchiveFixture, unittest.TestCase):
         self.rows = list(scan.walk(self.archive_root))
         self.events = eventdata.collect_events(self.rows)
         self.analysis = dupes.analyze(self.rows)
+        self.duplicate_keys = dupes.duplicate_event_keys(self.analysis)
         self.conflicts = naming.find_conflicts([
             {"name": e["event"], "iso": e["iso"], "path": e["event"]}
             for e in self.events
@@ -25,7 +26,8 @@ class TestManifests(fixtures.ArchiveFixture, unittest.TestCase):
 
     def test_manifest_lists_every_event_and_the_conflicts(self):
         path = os.path.join(self.work, "events-manifest.md")
-        manifests.write_events_manifest(self.events, self.analysis, self.conflicts, path)
+        manifests.write_events_manifest(self.events, self.analysis, self.conflicts,
+                                        self.duplicate_keys, path)
         with open(path) as fh:
             text = fh.read()
         for e in self.events:
@@ -33,10 +35,47 @@ class TestManifests(fixtures.ArchiveFixture, unittest.TestCase):
         self.assertIn("Centerlight", text)
         self.assertIn("needs your decision", text.lower())
 
-    def test_rename_plan_has_a_row_per_event(self):
+    def test_orphan_catchall_event_is_a_tickable_row_but_its_mirror_is_not(self):
+        # "2022"/"2023" are catch-all folder names (scan.CATCHALLS), but not
+        # every folder inside one is a duplicate. An orphan catch-all event
+        # (no sibling anywhere in the archive) must still appear as a normal
+        # tickable row -- while a verified mirror (byte-identical to its
+        # sibling) must not, or it would double-count the same photos.
+        orphan_dir = os.path.join(self.archive_root, "Event Photos", "2022 Events",
+                                  "2022", "9999 Orphan Event")
+        os.makedirs(orphan_dir)
+        fixtures.make_seed_image(os.path.join(orphan_dir, "a.jpg"), "jpg")
+
+        rows = list(scan.walk(self.archive_root))
+        events = eventdata.collect_events(rows)
+        analysis = dupes.analyze(rows)
+        duplicate_keys = dupes.duplicate_event_keys(analysis)
+        conflicts = naming.find_conflicts([
+            {"name": e["event"], "iso": e["iso"], "path": e["event"]} for e in events
+        ])
+
+        path = os.path.join(self.work, "events-manifest.md")
+        manifests.write_events_manifest(events, analysis, conflicts, duplicate_keys, path)
+        with open(path) as fh:
+            text = fh.read()
+
+        self.assertIn("| [ ] |", text)
+        orphan_line = next(line for line in text.splitlines() if "Orphan Event" in line)
+        self.assertIn("[ ]", orphan_line)
+
+        # The verified mirror of "1023 Rendr Dinner" must not get its own row:
+        # its title shows up once (from the real folder), not duplicated.
+        rendr_rows = [line for line in text.splitlines()
+                     if line.startswith("| [ ] |") and "Rendr Dinner" in line]
+        self.assertEqual(len(rendr_rows), 1)
+
+    def test_rename_plan_has_a_row_per_non_duplicate_event(self):
         path = os.path.join(self.work, "rename-plan.csv")
-        count = manifests.write_rename_plan(self.events, path)
-        self.assertEqual(count, len(self.events))
+        count = manifests.write_rename_plan(self.events, self.duplicate_keys, path)
+        expected = len([e for e in self.events
+                       if not manifests.is_removed_duplicate(e, self.duplicate_keys)])
+        self.assertEqual(count, expected)
+        self.assertLess(count, len(self.events))
         with open(path) as fh:
             header = fh.readline().strip()
         self.assertEqual(header, "current_path,current_name,proposed_name,photos,category")
