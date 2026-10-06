@@ -24,7 +24,76 @@ _ADDRESS = re.compile(r"^([\d\-]+)\s+([a-z0-9]+)")
 # inside a house-number range ("136-20", "42-66") or a typo'd separator
 # ("Fang-730") and must not be treated as a word boundary.
 _LOOSE_DASH = re.compile(r"\s[-–]|[-–]\s")
-_PREFIX_LOOSE = re.compile(r"^.*?(?:\s[-–]|[-–]\s)\s*")
+_PREFIX_LOOSE = re.compile(r"^(.*?)(?:\s[-–]|[-–]\s)\s*")
+# A real, complete address is either the whole remaining text, or is
+# immediately followed by a recognized street-type word. Used to tell a
+# genuine address ("136-20 38th St", followed by nothing or "- 2024
+# Renovation") apart from a practice name that merely starts with the same
+# digits as the real address ("833 Janlian Medical Group", followed by
+# "Medical Group", not a street-type word).
+_STREET_SUFFIX = re.compile(
+    r"^(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|pl|"
+    r"place|ct|court|hwy|highway|pkwy|pwky|parkway|way|cir|circle|plaza|"
+    r"ter|terrace)\.?$"
+)
+
+
+def _is_complete_address(tail):
+    """Is `tail` -- whatever immediately follows a matched street word --
+    consistent with that match being a genuine, self-contained address?"""
+    tail = tail.strip()
+    if not tail:
+        return True
+    return bool(_STREET_SUFFIX.match(tail.split()[0]))
+
+
+def _best_address_match(s):
+    """Return the _ADDRESS match that best represents the address in `s`.
+
+    A loose (whitespace-adjacent) dash usually separates a practice name
+    from the address that follows it ("Dr. Hall - 2251 86th St"). Two
+    real-archive shapes break a naive "always prefer the text after the
+    dash" rule, so the two sides are evaluated and chosen between on
+    evidence rather than tried in a fixed order:
+
+    - A practice name can itself start with the location's own house
+      number ("833 Janlian Medical Group - 833 58th St") -- syntactically
+      number-first, but not a complete address, so the right side wins.
+    - A complete address can be followed by unrelated trailing text
+      ("136-20 38th St - 2024 Renovation") -- here the left side is the
+      complete, self-contained address, so it wins even though it is also
+      number-first.
+
+    The left side wins only when it parses as an address AND is complete
+    per `_is_complete_address`; otherwise the right side wins if it
+    parses; otherwise an incomplete left match is used as a last resort.
+
+    A tight dash (no adjacent whitespace, as in a house-number range or a
+    typo'd separator like "Fang-730") is never treated as a split point
+    here -- it falls through to the direct match / any-dash fallback
+    below instead.
+    """
+    if _LOOSE_DASH.search(s):
+        m = _PREFIX_LOOSE.match(s)
+        if m:
+            left = m.group(1).strip()
+            right = s[m.end():].strip()
+            left_m = _ADDRESS.match(left)
+            if left_m and _is_complete_address(left[left_m.end():]):
+                return left_m
+            right_m = _ADDRESS.match(right)
+            if right_m:
+                return right_m
+            if left_m:
+                return left_m
+    direct = _ADDRESS.match(s)
+    if direct:
+        return direct
+    # Last resort: a typo'd separator with no surrounding whitespace
+    # ("Dr. Chixin Fang-730 58th Street"). Strip at the first dash of any
+    # kind.
+    stripped = _PREFIX.sub("", s, count=1).strip()
+    return _ADDRESS.match(stripped)
 
 
 def normalize(name):
@@ -42,21 +111,7 @@ def normalize(name):
     s = re.sub(r"\s*-\s*[a-z ]*directory\s*$", "", s)
     s = _SUFFIX.sub("", s)
     s = s.strip()
-    candidate = None
-    # When a real separator dash is present, the address almost always
-    # follows it ("833 Janlian Medical Group - 833 58th St" must not match
-    # on the leading "833 Janlian" just because it also looks number-first).
-    if _LOOSE_DASH.search(s):
-        stripped = _PREFIX_LOOSE.sub("", s, count=1).strip()
-        candidate = _ADDRESS.match(stripped)
-    if not candidate:
-        candidate = _ADDRESS.match(s)
-    if not candidate:
-        # Last resort: a typo'd separator with no surrounding whitespace
-        # ("Dr. Chixin Fang-730 58th Street"). Strip at the first dash of
-        # any kind.
-        stripped = _PREFIX.sub("", s, count=1).strip()
-        candidate = _ADDRESS.match(stripped)
+    candidate = _best_address_match(s)
     if not candidate:
         return None
     number = candidate.group(1).replace("-", "")
@@ -100,8 +155,29 @@ def collect_after(root):
 
 
 def _label(after_dir):
-    """Human label: the address portion of the after-side folder name."""
+    """Human label: the address portion of the after-side folder name.
+
+    Mirrors normalize()'s loose-dash-first decision (see
+    _best_address_match) instead of always stripping at the first dash of
+    any kind, so a tight dash inside the practice name -- as in "Medical
+    Imaging-Urgent Care - 729 61st ST" -- doesn't leave a leftover prefix
+    fragment ("Urgent Care - 729 61st ST") in text that ends up as a
+    user-visible caption. Matching is done on a lowercased copy to decide
+    *where* to split; the returned text is sliced from the original
+    (same length, so offsets line up) to keep its original casing.
+    """
     name = os.path.basename(after_dir)
+    low = name.lower()
+    if _LOOSE_DASH.search(low):
+        m = _PREFIX_LOOSE.match(low)
+        if m:
+            left_low = m.group(1).strip()
+            right_low = low[m.end():].strip()
+            left_m = _ADDRESS.match(left_low)
+            if left_m and _is_complete_address(left_low[left_m.end():]):
+                return name[:len(m.group(1))].strip() or name
+            if _ADDRESS.match(right_low):
+                return name[m.end():].strip() or name
     return _PREFIX.sub("", name, count=1).strip() or name
 
 

@@ -31,6 +31,52 @@ class TestNormalize(unittest.TestCase):
             addresses.normalize("7217 18th Ave - Logo.png"), "7217 18th"
         )
 
+    def test_prefers_the_complete_address_before_an_unrecognized_trailing_dash(self):
+        # The practice name here is number-first too ("136-20 38th St"
+        # itself looks like a complete address), but what follows the
+        # loose dash is not one of the known photo-descriptor words, so a
+        # naive "always take the text after the dash" rule would wrongly
+        # match on "2024 Renovation" instead.
+        self.assertEqual(
+            addresses.normalize("136-20 38th St - 2024 Renovation"), "13620 38th"
+        )
+
+    def test_prefers_the_address_when_the_practice_name_starts_with_the_same_number(self):
+        # "833 Janlian Medical Group" is syntactically number-first too,
+        # but it is not a complete address (nothing street-like follows
+        # the house number), so the real address after the dash must win.
+        self.assertEqual(
+            addresses.normalize("833 Janlian Medical Group - 833 58th St"),
+            "833 58th",
+        )
+
+    def test_finds_the_address_past_a_tight_dash_inside_the_practice_name(self):
+        # The first dash of any kind is the tight one inside
+        # "Imaging-Urgent"; the real separator is the loose dash before
+        # "729".
+        self.assertEqual(
+            addresses.normalize("Medical Imaging-Urgent Care - 729 61st ST"),
+            "729 61st",
+        )
+
+    def test_finds_the_address_past_a_typo_dash_with_no_surrounding_space(self):
+        self.assertEqual(
+            addresses.normalize("Dr. Chixin Fang-730 58th Street"), "730 58th"
+        )
+
+
+class TestLabel(unittest.TestCase):
+    def test_label_does_not_leave_a_fragment_from_a_tight_dash(self):
+        # Regression: _label used to strip only at the first dash of any
+        # kind, so this real archive name produced the user-visible label
+        # "Urgent Care - 729 61st ST" instead of just the address. _label
+        # only inspects the basename, so a non-existent path is fine here.
+        after_dir = (
+            "/Event_photos/_Completed Installation Photos/"
+            "Medical Imaging-Urgent Care - 729 61st ST"
+        )
+        self.assertEqual(addresses._label(after_dir), "729 61st ST")
+
 
 class TestMatching(fixtures.ArchiveFixture, unittest.TestCase):
     def test_finds_the_three_planted_pairs(self):
