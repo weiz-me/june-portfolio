@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Event Gallery — Hui Jun (June) Wen</title>
+  <meta name="description" content="Community health seminars, health fairs, clinic grand openings and payer partnership events led by Hui Jun (June) Wen in New York City.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="gallery.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="index.html">Hui Jun Wen</a>
+    <button class="nav-toggle" aria-label="Open menu" aria-expanded="false">☰</button>
+    <nav class="nav-links">
+      <a href="index.html#work">Work</a>
+      <a href="index.html#seminars">Seminars</a>
+      <a href="events.html" aria-current="page">Events</a>
+      <a href="index.html#experience">Experience</a>
+      <a href="index.html#contact">Contact</a>
+      <button class="theme-toggle" aria-label="Toggle dark mode">◐</button>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="section" data-gallery>
+      <div class="wrap">
+        <div class="gal-head">
+          <p class="eyebrow">Event gallery</p>
+          <h2>Community programs, as they happened.</h2>
+          <p class="lead">Physician-led seminars, health fairs, clinic launches and payer partnership events across Brooklyn, Queens, Manhattan and Staten Island.</p>
+        </div>
+        <div class="gal-filters">
+          <div class="gal-bar" data-gallery-years role="group" aria-label="Filter by year"></div>
+          <div class="gal-bar" data-gallery-categories role="group" aria-label="Filter by type"></div>
+        </div>
+        <p class="gal-count" data-gallery-count></p>
+        <div class="gal-grid" data-gallery-grid></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">© <span id="year"></span> Hui Jun (June) Wen · Queens, NY</footer>
+
+  <script src="data/events.js"></script>
+  <script src="gallery.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
