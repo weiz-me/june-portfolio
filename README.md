@@ -12,7 +12,7 @@ Files in `assets/`. A missing file shows a labeled placeholder.
 | `event_1.jpg`, `event_2.jpg` | ✅ Community fest booth, health seminar (from the 2026 progress report) |
 | `digital_*.jpg` | ✅ WeChat Video / WeChat articles / RedNote screenshots (from the progress report) |
 | `headshot.jpg` | ✅ Headshot (from LinkedIn profile photo) |
-| `rebrand_before.jpg` / `rebrand_after.jpg` | ⬜ Storefront signage before / after the Rendr rebrand |
+| `rebrand/*-before.jpg`, `rebrand/*-after.jpg` | ✅ 5 featured before/after signage pairs, matched by address from OneDrive (32 pairs available, see `tools/out/rebrand-pairs.json`) |
 | `Hui_Jun_Wen_Resume.pdf` | ✅ Final résumé |
 
 Content sources: résumé + portfolio notes from the ChatGPT conversation "解释CRM概念"; 2026 Marketing Monthly Progress Report (Jan–Jun).

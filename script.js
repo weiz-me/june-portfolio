@@ -1,5 +1,6 @@
 // Footer year
-document.getElementById("year").textContent = new Date().getFullYear();
+const yearEl = document.getElementById("year");
+if (yearEl) yearEl.textContent = new Date().getFullYear();
 
 // Image slots: until the real file is dropped into assets/, show a labeled placeholder
 function toSlot(img) {
@@ -19,24 +20,29 @@ try {
   const saved = localStorage.getItem("theme");
   if (saved) root.dataset.theme = saved;
 } catch {}
-document.querySelector(".theme-toggle").addEventListener("click", () => {
-  const isDark = root.dataset.theme
-    ? root.dataset.theme === "dark"
-    : matchMedia("(prefers-color-scheme: dark)").matches;
-  root.dataset.theme = isDark ? "light" : "dark";
-  try { localStorage.setItem("theme", root.dataset.theme); } catch {}
-});
+const themeBtn = document.querySelector(".theme-toggle");
+if (themeBtn) {
+  themeBtn.addEventListener("click", () => {
+    const isDark = root.dataset.theme
+      ? root.dataset.theme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = isDark ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+  });
+}
 
 // Mobile menu
 const toggle = document.querySelector(".nav-toggle");
 const links = document.querySelector(".nav-links");
-toggle.addEventListener("click", () => {
-  const open = links.classList.toggle("open");
-  toggle.setAttribute("aria-expanded", open);
-});
-links.querySelectorAll("a").forEach((a) =>
-  a.addEventListener("click", () => links.classList.remove("open"))
-);
+if (toggle && links) {
+  toggle.addEventListener("click", () => {
+    const open = links.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", open);
+  });
+  links.querySelectorAll("a").forEach((a) =>
+    a.addEventListener("click", () => links.classList.remove("open"))
+  );
+}
 
 // Reveal sections on scroll
 const io = new IntersectionObserver(
@@ -48,4 +54,49 @@ const io = new IntersectionObserver(
 document.querySelectorAll(".section, .card").forEach((el) => {
   el.classList.add("reveal");
   io.observe(el);
+});
+
+// Before/after comparison: markup ships all pairs; JS only switches which is shown.
+document.querySelectorAll("[data-ba]").forEach((ba) => {
+  const wrap = ba.querySelector(".ba-pairs");
+  const pairs = [...ba.querySelectorAll("[data-ba-pair]")];
+  const label = ba.querySelector("[data-ba-label]");
+  const dots = ba.querySelector("[data-ba-dots]");
+  if (!wrap || pairs.length === 0) return;
+
+  let index = 0;
+  const show = (next) => {
+    index = (next + pairs.length) % pairs.length;
+    pairs.forEach((p, i) => p.classList.toggle("active", i === index));
+    if (label) label.textContent = pairs[index].dataset.label || "";
+    if (dots) {
+      [...dots.children].forEach((d, i) =>
+        d.setAttribute("aria-current", String(i === index))
+      );
+    }
+  };
+
+  if (dots) {
+    pairs.forEach((p, i) => {
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "ba-dot";
+      dot.setAttribute("aria-label", `Show ${p.dataset.label || `location ${i + 1}`}`);
+      dot.addEventListener("click", () => show(i));
+      dots.append(dot);
+    });
+    dots.removeAttribute("aria-hidden");
+  }
+
+  const prev = ba.querySelector(".ba-prev");
+  const next = ba.querySelector(".ba-next");
+  if (prev) prev.addEventListener("click", () => show(index - 1));
+  if (next) next.addEventListener("click", () => show(index + 1));
+  ba.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") show(index - 1);
+    if (e.key === "ArrowRight") show(index + 1);
+  });
+
+  wrap.dataset.baReady = "1";
+  show(0);
 });
