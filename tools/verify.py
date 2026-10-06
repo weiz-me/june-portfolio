@@ -27,14 +27,31 @@ def load_gallery_data(path):
     return json.loads(match.group(1))
 
 
-def _walk_assets(root):
-    base = os.path.join(root, "assets", "events")
+def _walk_dir(root, base):
     for dirpath, dirnames, filenames in os.walk(base):
         for name in filenames:
             if name.startswith("."):
                 continue
             full = os.path.join(dirpath, name)
             yield os.path.relpath(full, root).replace(os.sep, "/"), full
+
+
+def _walk_assets(root):
+    """assets/events/ only -- the set of files data/events.js can reference."""
+    return _walk_dir(root, os.path.join(root, "assets", "events"))
+
+
+def _walk_all_assets(root):
+    """All of assets/, recursively. Used for checks that must hold
+    everywhere under assets/ regardless of whether data/events.js or an
+    <img> tag references the file: the size cap and the banned-format
+    list. Do NOT use this for the orphan check -- assets/rebrand/*.jpg,
+    assets/flyer_*.jpg, headshot.jpg and the résumé PDF are referenced from
+    HTML, not from data/events.js, and widening orphan detection to all of
+    assets/ would wrongly flag every one of them. The orphan check must
+    stay scoped to _walk_assets() (assets/events/ only).
+    """
+    return _walk_dir(root, os.path.join(root, "assets"))
 
 
 def check(root):
@@ -62,16 +79,24 @@ def check(root):
                if not os.path.exists(os.path.join(root, rel))]
     add("every referenced file exists", not missing, ", ".join(missing[:5]))
 
+    # Orphan detection stays scoped to assets/events/ -- see _walk_all_assets's
+    # docstring for why widening it would be wrong.
     on_disk = dict(_walk_assets(root))
     orphans = sorted(set(on_disk) - referenced)
     add("every asset is referenced", not orphans, ", ".join(orphans[:5]))
 
+    # Size cap and banned formats apply to all of assets/, not just
+    # assets/events/: a stray .heic or an oversized file dropped anywhere
+    # under assets/ is exactly the kind of mistake this checker exists to
+    # catch, regardless of whether anything references it yet.
+    all_on_disk = dict(_walk_all_assets(root))
+
     oversized = ["%s (%d KB)" % (rel, os.path.getsize(full) // 1024)
-                 for rel, full in sorted(on_disk.items())
+                 for rel, full in sorted(all_on_disk.items())
                  if os.path.getsize(full) > MAX_FILE_BYTES]
     add("no file over 500 KB", not oversized, ", ".join(oversized[:5]))
 
-    banned = [rel for rel in sorted(on_disk) if rel.lower().endswith(BANNED_EXTS)]
+    banned = [rel for rel in sorted(all_on_disk) if rel.lower().endswith(BANNED_EXTS)]
     add("no web-hostile formats in assets", not banned, ", ".join(banned[:5]))
 
     assets_root = os.path.join(root, "assets")

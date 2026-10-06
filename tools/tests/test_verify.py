@@ -93,6 +93,39 @@ class TestVerify(unittest.TestCase):
         ], html='<img src="https://example.com/a.png"><img src="data:image/gif;base64,R0lGOD">')
         self.assertTrue(self.results()["no dead img src in html"]["ok"])
 
+    def test_flags_a_banned_format_at_the_assets_root(self):
+        # Not under assets/events/ -- directly under assets/, e.g. dropped
+        # there by hand instead of through the publish pipeline. The size
+        # cap and banned-format checks must cover all of assets/, not just
+        # assets/events/.
+        write_repo(self.root, ONE_EVENT, [
+            ("assets/events/e1-001.jpg", 200 * 1024),
+            ("assets/events/thumbs/e1-001.jpg", 50 * 1024),
+            ("assets/leftover.heic", 1024),
+        ])
+        self.assertFalse(self.results()["no web-hostile formats in assets"]["ok"])
+
+    def test_flags_an_oversized_file_at_the_assets_root(self):
+        write_repo(self.root, ONE_EVENT, [
+            ("assets/events/e1-001.jpg", 200 * 1024),
+            ("assets/events/thumbs/e1-001.jpg", 50 * 1024),
+            ("assets/huge.jpg", 600 * 1024),
+        ])
+        self.assertFalse(self.results()["no file over 500 KB"]["ok"])
+
+    def test_a_legitimately_unreferenced_file_at_the_assets_root_still_passes(self):
+        # assets/headshot.jpg, assets/flyer_1.jpg, assets/rebrand/*.jpg etc.
+        # are referenced from HTML, not from data/events.js, so they are
+        # never in `referenced`. The orphan check ("every asset is
+        # referenced") must stay scoped to assets/events/ or every one of
+        # these would be wrongly flagged.
+        write_repo(self.root, ONE_EVENT, [
+            ("assets/events/e1-001.jpg", 200 * 1024),
+            ("assets/events/thumbs/e1-001.jpg", 50 * 1024),
+            ("assets/headshot.jpg", 50 * 1024),
+        ])
+        self.assertTrue(self.results()["every asset is referenced"]["ok"])
+
     def test_load_gallery_data_parses_the_js_assignment(self):
         write_repo(self.root, ONE_EVENT, [])
         data = verify.load_gallery_data(os.path.join(self.root, "data", "events.js"))

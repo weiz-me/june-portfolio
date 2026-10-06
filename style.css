@@ -140,22 +140,29 @@ h3 { font-size: 1.1rem; font-weight: 600; }
   margin-top: 2.5rem; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: .75rem;
 }
 .flyers figure { margin: 0; scroll-snap-align: start; }
-.flyers img, .flyers .slot { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; object-position: top; border-radius: 14px; }
+.flyers img, .flyers .slot { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; object-position: top; border-radius: 14px; }
 .flyers img { border: 1px solid var(--line); background: #fff; }
 figcaption { font-size: .8rem; color: var(--muted); margin-top: .5rem; line-height: 1.4; }
 .photos { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 2rem; }
 .photos figure { margin: 0; }
-.photos img, .photos .slot { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; }
+/* height: auto is required alongside aspect-ratio: when script.js sets the
+   img width/height attributes (to reserve layout space before load), an
+   explicit height attribute would otherwise win over aspect-ratio for the
+   used height, since the attribute becomes a presentation hint. height:
+   auto tells the box to derive its height from aspect-ratio instead,
+   covering the .featured-grid images too since they are rendered inside
+   this same .photos container. See gallery.css for the identical pattern. */
+.photos img, .photos .slot { width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; }
 .phones { display: grid; grid-template-columns: repeat(3, minmax(0, 240px)); gap: 1.25rem; margin-top: 2rem; }
 .phones figure { margin: 0; }
-.phones img, .phones .slot { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; object-position: top; border-radius: 22px; border: 1px solid var(--line); box-shadow: 0 10px 24px rgb(0 0 0 / .08); }
+.phones img, .phones .slot { width: 100%; height: auto; aspect-ratio: 9 / 16; object-fit: cover; object-position: top; border-radius: 22px; border: 1px solid var(--line); box-shadow: 0 10px 24px rgb(0 0 0 / .08); }
 .quote { font-family: var(--serif); font-size: clamp(1.3rem, 3vw, 1.9rem); color: var(--accent); text-align: center; max-width: 30ch; margin: 3rem auto 0; }
 
 .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(2rem, 5vw, 3.5rem); align-items: start; }
 .split p { color: var(--muted); max-width: 60ch; }
 .beforeafter { display: block; }
 .beforeafter figure { margin: 0; }
-.beforeafter img, .beforeafter .slot { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
+.beforeafter img, .beforeafter .slot { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
 .beforeafter figcaption { font-weight: 600; }
 
 /* Timeline */
@@ -219,7 +226,7 @@ figcaption { font-size: .8rem; color: var(--muted); margin-top: .5rem; line-heig
 .ba-pairs[data-ba-ready] .ba-pair { display: none; }
 .ba-pairs[data-ba-ready] .ba-pair.active { display: grid; }
 .ba-pair figure { margin: 0; }
-.ba-pair img, .ba-pair .slot { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
+.ba-pair img, .ba-pair .slot { width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; }
 .ba-pair figcaption { font-weight: 600; margin-top: .35rem; }
 .ba-dots { display: flex; gap: .4rem; justify-content: center; margin-top: .7rem; }
 .ba-dot { width: .5rem; height: .5rem; border-radius: 999px; border: 0; padding: 0; background: var(--line); cursor: pointer; }
@@ -227,7 +234,7 @@ figcaption { font-size: .8rem; color: var(--muted); margin-top: .5rem; line-heig
 .ba-note { color: var(--muted); font-size: .85rem; text-align: center; margin-top: .5rem; }
 @media (max-width: 720px) {
   .ba-pair, .ba-pairs[data-ba-ready] .ba-pair.active { grid-template-columns: 1fr 1fr; }
-  .ba-pair img, .ba-pair .slot { aspect-ratio: 1 / 1; }
+  .ba-pair img, .ba-pair .slot { height: auto; aspect-ratio: 1 / 1; }
 }
 
 /* Featured event strip */

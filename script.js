@@ -121,11 +121,13 @@ document.querySelectorAll("[data-ba]").forEach((ba) => {
     const fig = document.createElement("figure");
     const img = document.createElement("img");
     img.src = photo.thumb || photo.src;
-    // No width/height attributes: .photos img already fixes a 4:3 box via
-    // aspect-ratio + object-fit, and setting mismatched width/height
-    // attributes (most real photos aren't 4:3) overrides that aspect-ratio
-    // with the photo's raw pixel height, breaking the grid into tall,
-    // misaligned columns.
+    // width/height attributes reserve layout space before the image loads
+    // (same pattern as gallery.js). They would normally fight the
+    // aspect-ratio: 4/3 box .photos img sets, since most real photos
+    // aren't 4:3 -- that's handled by height: auto on the CSS side (see
+    // style.css), not by omitting these attributes.
+    img.width = photo.w || 0;
+    img.height = photo.h || 0;
     img.alt = photo.caption || event.title;
     img.loading = "lazy";
     img.decoding = "async";

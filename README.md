@@ -63,14 +63,13 @@ inside the archive. It defaults to a dry run, never deletes, and ships with
 
 ### The numbers
 
-- The archive has **142 unique events** — 131 with photos, plus 11 that an
-  earlier version of this tooling wrongly treated as duplicates of their
-  catch-all folder and hid from every manifest; they are real, distinct
-  events (2025 Year-End Holiday Party, Flushing Basement Grand Opening,
-  Swim Across America, and others) and are now included.
-- **9 event folders are empty** (no photos were ever filed in them), plus
-  **1 empty month folder** (`2026 Event/October Event`) that holds no events
-  at all. Both lists are in `tools/out/events-manifest.md`.
+- The archive has **142 unique events total: 133 have photos, and 9 are
+  empty event folders** (no photos were ever filed in them). 133 + 9 = 142
+  — the empty folders are part of that total, not an addition to it. Both
+  lists are in `tools/out/events-manifest.md`.
+- Separately, **1 month folder is empty** (`2026 Event/October Event`) — it
+  holds no events at all, so it is not one of the 142 and is reported on
+  its own in `events-manifest.md`.
 - `cleanup.sh` can safely move **2,548 files (7.67 GB)** — duplicates sitting
   in catch-all folders that mirror a sibling event folder exactly. The
   archive's *total* name+size duplication is larger, **2,917 files
@@ -90,7 +89,7 @@ those 28 folders have no rename guidance anywhere in the toolchain.
 
 Two things only you can resolve; the tooling never guesses either one.
 
-1. **`Centerlight Health Fair` has two dates.** The same 26 files are filed
+1. **`Centerlight Health Fair` has two dates.** The same 27 files are filed
    under both `2023 Events/11.23.23 Centerlight Health Fair` and
    `2023 Events/231113 Centerlight Health Fair` — is it 2023-11-13 or
    2023-11-23?
