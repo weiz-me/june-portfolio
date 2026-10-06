@@ -2,6 +2,7 @@ import json
 import os
 import re
 import unittest
+from unittest import mock
 
 from tools import build_assets, eventdata, scan
 from tools.tests import fixtures
@@ -135,7 +136,11 @@ class TestBuildAssets(fixtures.ArchiveFixture, unittest.TestCase):
         with open(self.selection, "w") as fh:
             json.dump(payload, fh)
 
-        result = self.build()
+        with mock.patch("tools.build_assets.images.web",
+                        wraps=build_assets.images.web) as spy_web:
+            result = self.build()
+        called_with = [call.args[0] for call in spy_web.call_args_list]
+        self.assertNotIn(bogus_abs, called_with)
 
         self.assertEqual(result["photos"], 3)
         self.assertEqual(len(result["skipped"]), 1)
@@ -146,6 +151,88 @@ class TestBuildAssets(fixtures.ArchiveFixture, unittest.TestCase):
             if name == "thumbs":
                 continue
             self.assertTrue(name.endswith(".jpg"))
+
+    def test_republishing_a_smaller_selection_removes_stale_files(self):
+        """Files are named <event_id>-NNN.jpg. Re-running build() with a
+        smaller selection for an event must not leave the old
+        higher-numbered files behind: Task 15's verifier checks assets in
+        both directions (referenced files exist, and published files are
+        referenced), so an orphan left over from a previous, larger
+        selection fails that check far from its actual cause."""
+        event = self.write_selection("Rendr Dinner")  # 3 photos
+        self.build()
+        full_before = set(os.listdir(self.assets)) - {"thumbs"}
+        thumb_before = set(os.listdir(os.path.join(self.assets, "thumbs")))
+        self.assertEqual(len(full_before), 3)
+        self.assertEqual(len(thumb_before), 3)
+
+        # Shrink the selection to a single photo from the same event.
+        photos = [{"event_id": event["id"], "rel": event["rows"][0]["rel"],
+                   "caption": ""}]
+        with open(self.selection, "w") as fh:
+            json.dump({"photos": photos}, fh)
+        self.build()
+
+        full_after = set(os.listdir(self.assets)) - {"thumbs"}
+        thumb_after = set(os.listdir(os.path.join(self.assets, "thumbs")))
+        self.assertEqual(len(full_after), 1)
+        self.assertEqual(len(thumb_after), 1)
+        gone = full_before - full_after
+        self.assertEqual(len(gone), 2)
+        # The same stale names must be gone from both the full-size and
+        # thumbnail directories, not just miscounted.
+        self.assertEqual(thumb_before - thumb_after, gone)
+
+    def test_republish_cleanup_never_touches_files_outside_its_own_dirs(self):
+        """_prune_stale must be scoped to assets_dir/thumbs_dir only -- a
+        stray file sitting directly in assets_dir that was never produced
+        by this tool (e.g. a sibling asset dropped there by hand) is still
+        fair game per the "published set is authoritative" rule, but
+        anything outside assets_dir entirely (a sibling directory) must
+        never be touched."""
+        self.write_selection("Rendr Dinner")
+        sibling = os.path.join(os.path.dirname(self.assets), "rebrand")
+        os.makedirs(sibling, exist_ok=True)
+        untouched = os.path.join(sibling, "keep-me.jpg")
+        with open(untouched, "w") as fh:
+            fh.write("not touched")
+        self.build()
+        self.assertTrue(os.path.exists(untouched))
+
+    def test_featured_set_spreads_across_events_capped_per_event(self):
+        """A single uncapped counter walked in event order could let one
+        early, heavily-selected event supply the entire featured strip.
+        With three events of differing photo counts, the featured set must
+        draw from all three and no event may contribute more than 2."""
+        seminar = next(e for e in self.events if "Blood Pressure Seminar" in e["title"])
+        gala = next(e for e in self.events if "CAS Award Gala" in e["title"])
+        dinner = next(e for e in self.events if "Rendr Dinner" in e["title"])
+        self.assertEqual(dinner["category"], "internal")
+        self.assertNotEqual(seminar["category"], "internal")
+        self.assertNotEqual(gala["category"], "internal")
+
+        photos = []
+        for event in (seminar, gala, dinner):
+            for row in event["rows"]:
+                photos.append({"event_id": event["id"], "rel": row["rel"],
+                               "caption": ""})
+        with open(self.selection, "w") as fh:
+            json.dump({"photos": photos}, fh)
+
+        result = build_assets.build(self.archive_root, self.selection,
+                                    self.assets, self.data, featured=5)
+
+        counts = {}
+        for out_event in result["data"]["events"]:
+            counts[out_event["id"]] = sum(
+                1 for p in out_event["photos"] if p["featured"])
+
+        self.assertEqual(sum(counts.values()), 5)
+        self.assertTrue(all(c <= 2 for c in counts.values()))
+        self.assertEqual(len([c for c in counts.values() if c > 0]), 3)
+        # The internal event (fewer public photos available) only fills
+        # the gap left by the two public events, never crowds them out.
+        self.assertEqual(counts[dinner["id"]], 1)
 
     def test_empty_selection_still_produces_a_loadable_data_file(self):
         """data/events.js is a placeholder the gallery page already loads

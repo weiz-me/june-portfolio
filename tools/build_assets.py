@@ -17,13 +17,30 @@ against its extension here, at this call site, before any sips call is
 attempted. This mirrors the decision made for thumbs.py and for images.py
 itself: extension policy stays visible in each caller instead of living in
 a shared helper.
+
+Re-running build() with a smaller selection is the normal workflow (the
+archive owner adjusts her picks), not an edge case, so the published set
+is authoritative: anything left over under assets_dir/thumbs_dir from a
+previous run that this run did not (re)produce gets deleted. This is
+scoped to exactly those two directories -- assets_dir is always
+"assets/events" in the one real call path, never "assets/" itself -- so
+it never touches assets/rebrand/ or anything else a sibling tool owns.
+
+Featured photos are chosen after publishing, not while walking the
+selection: a single uncapped counter walked in event order would let one
+early, heavily-selected event supply the entire featured strip. Instead
+the cap is spread round-robin across events (first photo of each, then
+second of each, capped at 2 per event), preferring public categories over
+"internal" ones -- the strip is the first thing a visitor sees, and an
+internal/staff event should only appear there if nothing public is
+available.
 """
 import argparse
 import json
 import os
 import sys
 
-from tools import eventdata, images, scan
+from tools import classify, eventdata, images, scan
 
 # Extensions sips can actually read and publish. HEIC and JFIF are added on
 # top of images.PUBLISHABLE, same as tools/thumbs.py's THUMBABLE: sips
@@ -38,6 +55,51 @@ def _skip_reason(ext):
 
 def _rel_posix(*parts):
     return "/".join(parts)
+
+
+def _prune_stale(assets_dir, thumbs_dir, keep_names):
+    """Delete files under assets_dir/thumbs_dir that this run did not
+    (re)produce. Scoped to exactly these two directories' own files --
+    never recurses, never touches anything outside them -- so a caller
+    passing "assets/events" can never reach "assets/rebrand" or a sibling
+    tool's files."""
+    for directory in (assets_dir, thumbs_dir):
+        if not os.path.isdir(directory):
+            continue
+        for name in os.listdir(directory):
+            path = os.path.join(directory, name)
+            if not os.path.isfile(path):
+                continue  # e.g. the thumbs/ subdirectory itself
+            if name not in keep_names:
+                os.remove(path)
+
+
+PER_EVENT_FEATURED_CAP = 2
+
+
+def _select_featured(out_events, cap):
+    """Mark up to `cap` photos as featured, spread round-robin across
+    events (first photo of each, then second of each, ...), at most
+    PER_EVENT_FEATURED_CAP per event, so no single event can supply the
+    whole featured strip. Events in a public category (per
+    classify.PUBLISHABLE_CATEGORIES) are filled first; "internal" events
+    only contribute once every public event has been exhausted."""
+    public = [e for e in out_events if e["category"] in classify.PUBLISHABLE_CATEGORIES]
+    internal = [e for e in out_events if e["category"] not in classify.PUBLISHABLE_CATEGORIES]
+    remaining = cap
+    for group in (public, internal):
+        if remaining <= 0:
+            break
+        for round_idx in range(PER_EVENT_FEATURED_CAP):
+            if remaining <= 0:
+                break
+            for event in group:
+                if remaining <= 0:
+                    break
+                photos = event["photos"]
+                if round_idx < len(photos):
+                    photos[round_idx]["featured"] = True
+                    remaining -= 1
 
 
 def build(archive, selection_path, assets_dir, data_path, featured=8,
@@ -72,7 +134,7 @@ def build(archive, selection_path, assets_dir, data_path, featured=8,
     out_events = []
     total_photos = 0
     total_bytes = 0
-    featured_left = featured
+    published_names = set()
 
     for event_id in sorted(picked, key=lambda i: (events[i]["iso"] or "9999", i)):
         event = events[event_id]
@@ -92,16 +154,14 @@ def build(archive, selection_path, assets_dir, data_path, featured=8,
             except images.SipsError as exc:
                 skipped.append({"rel": row["rel"], "why": str(exc)})
                 continue
-            is_featured = featured_left > 0
-            if is_featured:
-                featured_left -= 1
+            published_names.add(name)
             photos.append({
                 "src": _rel_posix("assets", "events", name),
                 "thumb": _rel_posix("assets", "events", "thumbs", name),
                 "w": info["w"],
                 "h": info["h"],
                 "caption": item.get("caption") or event["title"],
-                "featured": is_featured,
+                "featured": False,
             })
             total_photos += 1
             total_bytes += info["bytes"]
@@ -116,9 +176,17 @@ def build(archive, selection_path, assets_dir, data_path, featured=8,
             "category_label": event["category_label"],
             "physician": event["physician"] or "",
             "partners": event["partners"],
-            "featured": any(p["featured"] for p in photos),
             "photos": photos,
         })
+
+    # The published set is authoritative: drop anything left over from an
+    # earlier run with a larger selection before it can become an orphan
+    # (referenced by nobody, which Task 15's verifier flags as a failure).
+    _prune_stale(assets_dir, thumbs_dir, published_names)
+
+    _select_featured(out_events, featured)
+    for out_event in out_events:
+        out_event["featured"] = any(p["featured"] for p in out_event["photos"])
 
     data = {"events": out_events}
     data_dir = os.path.dirname(data_path)
