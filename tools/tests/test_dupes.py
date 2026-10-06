@@ -79,6 +79,29 @@ class TestAnalyze(fixtures.ArchiveFixture, unittest.TestCase):
                    and "2025 Events" in e["rows"][0]["rel"]]
         self.assertTrue(matched, "cross-year archive duplicate not detected")
 
+    def test_signage_folder_is_never_a_sibling_even_with_a_slug_and_key_collision(self):
+        # A signage folder outside "Event Photos" that happens to share both
+        # its name (so its slug collides) and a file's (name, size) with a
+        # catch-all event folder must never be treated as that event's
+        # sibling: signage trees can never legitimately be an event's
+        # original copy.
+        signage_dir = os.path.join(self.archive_root, "_Original Excelsior Photos",
+                                   "Brooklyn", "George Hall, MD - 2251 86th St")
+        signage_file = os.path.join(signage_dir, "IMG_0001.jpg")
+
+        catchall_dir = os.path.join(self.archive_root, "Event Photos", "2022 Events",
+                                    "2022", "George Hall, MD - 2251 86th St")
+        os.makedirs(catchall_dir)
+        # A true copy, so (name, size) is identical by construction -- no
+        # dependency on image-encoder determinism.
+        shutil.copy2(signage_file, os.path.join(catchall_dir, "IMG_0001.jpg"))
+
+        result = dupes.analyze(self.rows())
+        full_events = [e["event"] for e in result["full"]]
+        unmatched_events = [u["event"] for u in result["unmatched"]]
+        self.assertNotIn("George Hall, MD - 2251 86th St", full_events)
+        self.assertIn("George Hall, MD - 2251 86th St", unmatched_events)
+
 
 class TestWriteCsv(fixtures.ArchiveFixture, unittest.TestCase):
     def setUp(self):

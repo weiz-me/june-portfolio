@@ -10,7 +10,7 @@ Sibling lookup spans the whole archive, because 2025 Events/archive/ holds
 import csv
 import os
 
-from tools import naming
+from tools import naming, scan
 
 
 def file_key(row):
@@ -35,10 +35,15 @@ def analyze(rows):
     groups = group_events(rows)
 
     # Index non-catchall folders by normalized event name, archive-wide.
+    # Restricted to the events tree: catch-alls only ever exist under
+    # "Event Photos", so a signage folder (_Original Excelsior Photos,
+    # _Completed Installation Photos, _Original Legacy Rendr Photo) can
+    # never legitimately be a catch-all's sibling, even if its slug
+    # happens to collide.
     originals = {}
     for key, g in groups.items():
         top, year, event, catchall = key
-        if catchall:
+        if catchall or top != scan.EVENTS_TOP:
             continue
         originals.setdefault(naming.slugify(event), []).append((key, g))
 
