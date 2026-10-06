@@ -77,6 +77,22 @@ class TestLabel(unittest.TestCase):
         )
         self.assertEqual(addresses._label(after_dir), "729 61st ST")
 
+    def test_label_is_not_truncated_by_a_non_length_preserving_lowercase(self):
+        # Regression: a prior version of _label matched against
+        # name.lower() to find the split point, then sliced the original
+        # `name` using those offsets. str.lower() is not length-preserving
+        # for every Unicode character -- U+0130 "I with dot above" (İ)
+        # lowercases to two code points ("i" + combining dot) -- so an "İ"
+        # ahead of the split point shifted every later offset by one and
+        # silently ate the leading digit of the address. Matching directly
+        # against `name` (this test's fix) keeps offsets native to the
+        # string being sliced, regardless of what precedes the split.
+        after_dir = (
+            "/Event_photos/_Completed Installation Photos/"
+            "İmaging Care - 729 61st ST"
+        )
+        self.assertEqual(addresses._label(after_dir), "729 61st ST")
+
 
 class TestMatching(fixtures.ArchiveFixture, unittest.TestCase):
     def test_finds_the_three_planted_pairs(self):

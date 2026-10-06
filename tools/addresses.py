@@ -18,7 +18,7 @@ _SUFFIX = re.compile(
     r"\s*(#|ste\b|suite\b|fl\b|floor\b|\d+(st|nd|rd|th)?\s*fl\b|apt\b|unit\b).*$",
     re.I,
 )
-_ADDRESS = re.compile(r"^([\d\-]+)\s+([a-z0-9]+)")
+_ADDRESS = re.compile(r"^([\d\-]+)\s+([a-z0-9]+)", re.I)
 # A dash with whitespace on at least one side is a genuine word separator
 # ("Group - 833 58th St"). A dash with no surrounding whitespace is always
 # inside a house-number range ("136-20", "42-66") or a typo'd separator
@@ -34,7 +34,8 @@ _PREFIX_LOOSE = re.compile(r"^(.*?)(?:\s[-–]|[-–]\s)\s*")
 _STREET_SUFFIX = re.compile(
     r"^(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|pl|"
     r"place|ct|court|hwy|highway|pkwy|pwky|parkway|way|cir|circle|plaza|"
-    r"ter|terrace)\.?$"
+    r"ter|terrace)\.?$",
+    re.I,
 )
 
 
@@ -162,22 +163,30 @@ def _label(after_dir):
     any kind, so a tight dash inside the practice name -- as in "Medical
     Imaging-Urgent Care - 729 61st ST" -- doesn't leave a leftover prefix
     fragment ("Urgent Care - 729 61st ST") in text that ends up as a
-    user-visible caption. Matching is done on a lowercased copy to decide
-    *where* to split; the returned text is sliced from the original
-    (same length, so offsets line up) to keep its original casing.
+    user-visible caption.
+
+    This matches directly against `name` -- never a lowercased copy --
+    and relies on _ADDRESS/_STREET_SUFFIX being case-insensitive (re.I)
+    to recognize "Mott"/"St"/"ST" etc. in their original casing. A prior
+    version matched against name.lower() to decide where to split and
+    then sliced `name` using those offsets; str.lower() is not
+    length-preserving for every Unicode character (e.g. U+0130 "İ"
+    lowercases to two code points), so an offset computed on the
+    lowercased copy can land one or more characters into `name`,
+    silently truncating the caption. Matching on `name` itself keeps
+    every offset native to the string being sliced.
     """
     name = os.path.basename(after_dir)
-    low = name.lower()
-    if _LOOSE_DASH.search(low):
-        m = _PREFIX_LOOSE.match(low)
+    if _LOOSE_DASH.search(name):
+        m = _PREFIX_LOOSE.match(name)
         if m:
-            left_low = m.group(1).strip()
-            right_low = low[m.end():].strip()
-            left_m = _ADDRESS.match(left_low)
-            if left_m and _is_complete_address(left_low[left_m.end():]):
-                return name[:len(m.group(1))].strip() or name
-            if _ADDRESS.match(right_low):
-                return name[m.end():].strip() or name
+            left = m.group(1).strip()
+            right = name[m.end():].strip()
+            left_m = _ADDRESS.match(left)
+            if left_m and _is_complete_address(left[left_m.end():]):
+                return left or name
+            if _ADDRESS.match(right):
+                return right or name
     return _PREFIX.sub("", name, count=1).strip() or name
 
 
