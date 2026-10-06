@@ -34,7 +34,10 @@ CATCHALLS = [
 EMPTY_DIRS = [
     ("2025 Events", "3.29 Dr. David Zhuang Health Talk"),
     ("2025 Events", "UCA (Cultural)  Event"),
+    # A bare, unpopulated month container -- not an event itself.
     ("2026 Event", "October Event"),
+    # A genuine empty event nested two levels deep under the month layer.
+    ("2026 Event", "April Event/4.2.2026 - HCS Q2 Birthday Party- Bensonhurst"),
 ]
 
 # Addresses present on both sides of the rebrand, plus one only-before and

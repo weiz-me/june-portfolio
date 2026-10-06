@@ -71,3 +71,33 @@ class TestCollectEvents(fixtures.ArchiveFixture, unittest.TestCase):
         everything = eventdata.collect_events(rows, tops=None)
         self.assertIn("_Completed Installation Photos",
                       {e["top"] for e in everything})
+
+    def test_bare_month_container_is_not_an_empty_event(self):
+        empty_events = eventdata.find_empty_event_dirs(self.archive_root)
+        months = [e for e in empty_events if e[-1] == "October Event"]
+        self.assertEqual(months, [])
+        titles = " ".join(e["title"] for e in self.events)
+        self.assertNotIn("October Event", titles)
+
+    def test_nested_empty_event_two_levels_deep_is_still_an_event(self):
+        empty_events = eventdata.find_empty_event_dirs(self.archive_root)
+        matches = [e for e in empty_events
+                  if "Bensonhurst" in e[-1]]
+        self.assertEqual(len(matches), 1)
+        nested = self.by_title("Bensonhurst")
+        self.assertEqual(nested["photos"], 0)
+
+
+class TestFindEmptyMonthDirs(fixtures.ArchiveFixture, unittest.TestCase):
+    def test_surfaces_the_bare_month_container(self):
+        months = eventdata.find_empty_month_dirs(self.archive_root)
+        self.assertEqual(len(months), 1)
+        rel, top, year, month = months[0]
+        self.assertEqual(top, "Event Photos")
+        self.assertEqual(year, "2026 Event")
+        self.assertEqual(month, "October Event")
+
+    def test_does_not_include_the_nested_empty_event(self):
+        months = eventdata.find_empty_month_dirs(self.archive_root)
+        names = [m[-1] for m in months]
+        self.assertNotIn("4.2.2026 - HCS Q2 Birthday Party- Bensonhurst", names)

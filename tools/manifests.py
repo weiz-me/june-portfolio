@@ -11,7 +11,8 @@ from tools import classify, dupes, eventdata, naming, scan
 GB = 1024.0 ** 3
 
 
-def write_events_manifest(events, analysis, conflicts, path, global_dupes=None):
+def write_events_manifest(events, analysis, conflicts, path, global_dupes=None,
+                          empty_months=None):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     lines = []
     lines.append("# Event manifest\n")
@@ -56,6 +57,15 @@ def write_events_manifest(events, analysis, conflicts, path, global_dupes=None):
         lines.append("%d event folders exist but hold no photos:\n" % len(empties))
         for e in empties:
             lines.append("- `%s`" % e["dir"])
+        lines.append("")
+
+    if empty_months:
+        lines.append("## Empty month folders\n")
+        lines.append("%d month folder(s) exist but have no events filed under "
+                     "them yet -- not events themselves, just unused buckets:\n"
+                     % len(empty_months))
+        for rel, _top, _year, _month in empty_months:
+            lines.append("- `%s`" % rel)
         lines.append("")
 
     by_category = {}
@@ -252,13 +262,14 @@ def main(argv=None):
     dupes.write_csv(analysis, os.path.join(out, "duplicates.csv"))
     events = eventdata.collect_events(
         rows, extra_dirs=eventdata.find_empty_event_dirs(args.archive))
+    empty_months = eventdata.find_empty_month_dirs(args.archive)
     conflicts = naming.find_conflicts([
         {"name": e["event"], "iso": e["iso"], "path": e["dir"]}
         for e in events if not e["catchall"]
     ])
     write_events_manifest(events, analysis, conflicts,
                           os.path.join(out, "events-manifest.md"),
-                          global_dupes=global_dupes)
+                          global_dupes=global_dupes, empty_months=empty_months)
     write_rename_plan(events, os.path.join(out, "rename-plan.csv"))
     moves = write_cleanup(analysis, args.archive,
                           os.path.join(out, "cleanup.sh"),
@@ -267,8 +278,9 @@ def main(argv=None):
     empties = len([e for e in events if e["photos"] == 0])
     print("files        %d (%.1f GB)" % (inv_stats["files"], inv_stats["bytes"] / GB))
     print("downloaded   %.1f%%" % (100.0 * inv_stats["hydrated"] / max(inv_stats["files"], 1)))
-    print("events       %d (%d empty folders)"
-          % (len([e for e in events if not e["catchall"]]), empties))
+    print("events       %d (%d empty folders, %d empty month folders)"
+          % (len([e for e in events if not e["catchall"]]), empties,
+             len(empty_months)))
     print("duplicates   scriptable: %d files, %.2f GB  |  global: %d files, %.2f GB"
           % (analysis["removable_files"], analysis["removable_bytes"] / GB,
              global_dupes["files"], global_dupes["bytes"] / GB))

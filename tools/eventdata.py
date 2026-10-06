@@ -6,7 +6,7 @@ events identically.
 import os
 import re
 
-from tools import classify, naming
+from tools import classify, naming, scan
 
 
 def year_hint(year_folder):
@@ -95,17 +95,19 @@ def collect_events(rows, extra_dirs=None, tops=("Event Photos",)):
     return records
 
 
-def find_empty_event_dirs(root):
-    """Event folders containing no files. collect_events() only sees files, so
-    empty folders -- which the archive has several of -- need their own pass.
+def _is_month_container(parts):
+    """True when `parts` (relative to root) points directly at a month
+    folder under the month-layer year -- e.g. "Event Photos/2026 Event/
+    October Event" -- rather than at an event folder. Mirrors the layer
+    scan.classify_path() collapses, via the same scan.MONTH_LAYER_YEAR
+    constant, so the two definitions cannot drift apart."""
+    return len(parts) == 3 and parts[1] == scan.MONTH_LAYER_YEAR
 
-    Events can sit at any depth under the events tree (2026 is filed by
-    month, so some empty folders are two levels deep: "2026 Event/<month>/
-    <event>"), so this walks every directory rather than assuming a fixed
-    depth; only leaf directories with neither files nor subdirectories count
-    as empty.
-    """
-    found = []
+
+def _empty_leaf_dirs(root):
+    """Leaf directories under the events tree holding neither files nor
+    subdirectories, as (rel, parts) pairs. Shared by find_empty_event_dirs
+    and find_empty_month_dirs so both agree on what "empty" means."""
     events_top = os.path.join(root, "Event Photos")
     for dirpath, dirnames, filenames in os.walk(events_top):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
@@ -116,5 +118,41 @@ def find_empty_event_dirs(root):
         parts = rel.split(os.sep)
         if len(parts) < 3:
             continue
+        yield rel, parts
+
+
+def find_empty_event_dirs(root):
+    """Event folders containing no files. collect_events() only sees files, so
+    empty folders -- which the archive has several of -- need their own pass.
+
+    Events can sit at any depth under the events tree (2026 is filed by
+    month, so some empty folders are two levels deep: "2026 Event/<month>/
+    <event>"), so this walks every directory rather than assuming a fixed
+    depth; only leaf directories with neither files nor subdirectories count
+    as empty.
+
+    A bare month container (a direct child of the month-layer year, e.g.
+    "2026 Event/October Event") is not an event -- it is an unpopulated
+    month bucket, structurally identical to "April Event"/"September Event"
+    which do hold real dated event folders. Those are reported separately by
+    find_empty_month_dirs() instead of being returned here as phantom events.
+    """
+    found = []
+    for rel, parts in _empty_leaf_dirs(root):
+        if _is_month_container(parts):
+            continue
         found.append((rel, parts[0], parts[1], parts[-1]))
+    return found
+
+
+def find_empty_month_dirs(root):
+    """Month containers under the month-layer year (e.g. "2026 Event") that
+    hold no event subfolders yet -- `(rel, top, year, month)` tuples. June
+    should know these exist and are unused, but they are not events, so they
+    are kept out of find_empty_event_dirs()/collect_events() and reported
+    under their own heading instead."""
+    found = []
+    for rel, parts in _empty_leaf_dirs(root):
+        if _is_month_container(parts):
+            found.append((rel, parts[0], parts[1], parts[-1]))
     return found
