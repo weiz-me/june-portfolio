@@ -2891,7 +2891,7 @@ Expected: PASS, 17 tests.
 python3 -m tools.manifests --archive "$HOME/Library/CloudStorage/OneDrive2-RendrPhysicians/Event_photos"
 head -60 tools/out/events-manifest.md
 ```
-Expected: ~147 events, ~2,866 duplicate files / ~10.1 GB, and the Centerlight conflict listed under "Needs your decision". **Do not run `tools/out/cleanup.sh`** — that is June's call.
+Expected: ~132 events, ~2,866 duplicate files / ~10.1 GB, and the Centerlight conflict listed under "Needs your decision". **Do not run `tools/out/cleanup.sh`** — that is June's call.
 
 - [ ] **Step 7: Confirm the archive is untouched**
 

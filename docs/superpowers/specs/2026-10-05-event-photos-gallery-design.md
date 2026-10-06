@@ -23,7 +23,7 @@ Root: `~/Library/CloudStorage/OneDrive2-RendrPhysicians/Event_photos/`
 | Typical original | Canon EOS 6D, 5472×3648 |
 | **Downloaded locally** | **0.0%** — all cloud placeholders (`st_blocks == 0`) |
 | Redundant copies | 2,917 files = **10.12 GB** global; **7.67 GB** of it inside catch-all folders and safely scriptable |
-| Unique events | **147** |
+| Unique events | **132** (122 with photos + 10 empty folders) |
 | Duplicate event folders | 23 |
 
 Top-level layout:
@@ -113,7 +113,7 @@ Stage 1 │ read-only scan — 0 bytes downloaded
         │ metadata is already synced; photo bodies are not touched
         ▼ 4 manifests + cleanup.sh
 Stage 2 │ event-level pick → targeted hydration
-        │ 147 events → June picks ~25 → ~800 photos ≈ 4 GB → 480px thumbnails
+        │ 132 events → June picks ~25 → ~800 photos ≈ 4 GB → 480px thumbnails
         ▼
 Stage 3 │ photo-level pick in a local picker
         │ ~800 thumbnails → June picks ~80
@@ -130,8 +130,8 @@ downloads. Outputs (all under `tools/out/`, git-ignored):
 |---|---|
 | `inventory.csv` | One row per file: path, event, year, bytes, format, hydrated (`st_blocks > 0`) |
 | `duplicates.csv` | The 2,866 redundant copies, each marked keep / remove, with reclaimable bytes |
-| `rename-plan.csv` | 147 events: current name → proposed name |
-| `events-manifest.md` | 147 events with photo count, inferred category, physician, partners — **this is the Stage 2 picking sheet** |
+| `rename-plan.csv` | 132 events: current name → proposed name |
+| `events-manifest.md` | 132 events with photo count, inferred category, physician, partners — **this is the Stage 2 picking sheet** |
 | `cleanup.sh` + `undo.sh` | Generated, **never executed by tooling** |
 
 Duplicate identity = same basename **and** same size, confirmed across the whole folder, matching
@@ -171,14 +171,19 @@ These are reported for June to decide, never guessed:
 1. **`Centerlight Health Fair` date** — `11.23.23` (Nov 23) vs `231113` (Nov 13) on the same 27 files.
 2. **Year-less 2025 folders** — `3.29 Dr. David Zhuang Health Talk` and
    `12.12 Dr. Xian Cheung ACAP Health Seminar on Diabetes` sit under `2025 Events/` with no year.
-3. **Empty folders** — `3.29 Dr. David Zhuang Health Talk` and `UCA (Cultural)  Event` contain
-   0 photos. `2026 Event/October Event` is also empty.
+3. **Empty folders — 10 of them, not 3.** Seven are April/September 2026 events whose folders
+   were created and named but never filled: the three `HCS Q2 Birthday Party` locations
+   (Bensonhurst, W 7 St, Sheepshead Bay), `UCA Q2 Birthday Celebration`,
+   `Serica - The Power of Us AAPI Trailblazers Gala`, `HCS 29th Anniversary Benefit Gala`
+   and `9.18 - HCS Health Fair`. The others are `3.29 Dr. David Zhuang Health Talk`,
+   `UCA (Cultural)  Event` and `2026 Event/October Event`. Either the photos were never
+   filed or they live somewhere else — only June can say which.
 4. **Partial-overlap catch-alls** — every file in `2024 Events1/` and `2025 Events1/` that is *not*
    a duplicate is listed explicitly, so nothing unique is swept into `_DUPLICATES_`.
 
 ## 7. Stage 2 — event taxonomy and targeted hydration
 
-147 events are classified into 8 categories that map onto claims the site already makes:
+132 events are classified into 8 categories that map onto claims the site already makes:
 
 | Category | Supports | Examples |
 |---|---|---|
