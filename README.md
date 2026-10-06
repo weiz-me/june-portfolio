@@ -12,7 +12,7 @@ Files in `assets/`. A missing file shows a labeled placeholder.
 | `event_1.jpg`, `event_2.jpg` | ✅ Fallback community photos, shown until the gallery is built |
 | `digital_*.jpg` | ✅ WeChat Video / WeChat articles / RedNote screenshots |
 | `headshot.jpg` | ✅ Headshot |
-| `rebrand/*-before.jpg`, `rebrand/*-after.jpg` | ✅ 5 featured before/after signage pairs (32 available, see `tools/out/rebrand-pairs.json`) |
+| `rebrand/*-before.jpg`, `rebrand/*-after.jpg` | ✅ 5 featured before/after signage pairs (32 available — run `tools.build_rebrand` below to see or change them; it writes `tools/out/rebrand-pairs.json`, which is gitignored and only exists after you run it) |
 | `events/`, `events/thumbs/` | Generated — curated event photos and thumbnails |
 | `Hui_Jun_Wen_Resume.pdf` | ✅ Final résumé |
 
@@ -38,6 +38,21 @@ Everything in `tools/` is read-only with respect to the OneDrive archive. It
 needs no dependencies: Python 3.9 standard library plus macOS `sips`.
 
 ```bash
+# 0. Publish (or change) the featured before/after signage pairs on index.html.
+#    Matches every address that appears on both sides of the rebrand, then
+#    downloads and publishes only the chosen ones -- a couple files per pair,
+#    not the whole archive. Omit --only for the first 5 matches, or list
+#    slugs in the order you want them to appear (see the printed snippet's
+#    `data-label` for each slug, or read tools/out/rebrand-pairs.json after
+#    running this once).
+python3 -m tools.build_rebrand \
+  --archive "$HOME/Library/CloudStorage/OneDrive2-RendrPhysicians/Event_photos" \
+  --only 2251-86th-st 94-bowery 1865-86th-st SLUG SLUG
+#    -> assets/rebrand/*.jpg, tools/out/rebrand-pairs.json, and a snippet to
+#       paste into index.html's [data-ba] block. LOOK at every image before
+#       publishing it -- nothing automated checks for faces or third-party
+#       contact details in these photos either.
+
 # 1. Audit the archive. Downloads nothing.
 python3 -m tools.manifests --archive "$HOME/Library/CloudStorage/OneDrive2-RendrPhysicians/Event_photos"
 #    -> tools/out/{inventory,duplicates,rename-plan}.csv, events-manifest.md,

@@ -35,6 +35,55 @@ class TestManifests(fixtures.ArchiveFixture, unittest.TestCase):
         self.assertIn("Centerlight", text)
         self.assertIn("needs your decision", text.lower())
 
+    def test_rerunning_preserves_existing_ticks_by_event_id(self):
+        # Re-running the audit is the documented way to confirm the archive
+        # hasn't changed; it must never silently wipe a manifest a human
+        # has already spent hours ticking (I5).
+        path = os.path.join(self.work, "events-manifest.md")
+        manifests.write_events_manifest(self.events, self.analysis, self.conflicts,
+                                        self.duplicate_keys, path)
+        with open(path) as fh:
+            first = fh.read()
+
+        some_id = next(e["id"] for e in self.events if e["photos"] > 0)
+        ticked_line = next(line for line in first.splitlines()
+                           if "`%s`" % some_id in line)
+        first = first.replace(ticked_line, ticked_line.replace("[ ]", "[x]", 1))
+        with open(path, "w") as fh:
+            fh.write(first)
+
+        stats = manifests.write_events_manifest(
+            self.events, self.analysis, self.conflicts, self.duplicate_keys, path)
+        self.assertEqual(stats["carried"], 1)
+        self.assertEqual(stats["stale"], 0)
+
+        with open(path) as fh:
+            regenerated = fh.read()
+        regenerated_line = next(line for line in regenerated.splitlines()
+                                if "`%s`" % some_id in line)
+        self.assertIn("[x]", regenerated_line)
+
+        # Every other row must still start unticked.
+        other_rows = [line for line in regenerated.splitlines()
+                     if line.startswith("| [") and ("`%s`" % some_id) not in line]
+        self.assertTrue(other_rows)
+        self.assertTrue(all("[ ]" in line for line in other_rows))
+
+    def test_rerunning_reports_a_stale_tick_for_an_id_that_no_longer_exists(self):
+        path = os.path.join(self.work, "events-manifest.md")
+        manifests.write_events_manifest(self.events, self.analysis, self.conflicts,
+                                        self.duplicate_keys, path)
+        with open(path) as fh:
+            text = fh.read()
+        with open(path, "w") as fh:
+            fh.write(text.replace(
+                "| [ ] |", "| [x] |", 1).rstrip("\n")
+                + "\n| [x] | 2099-01-01 | Ghost Event | 0 |  |  | `ghost-event-id` |\n")
+
+        stats = manifests.write_events_manifest(
+            self.events, self.analysis, self.conflicts, self.duplicate_keys, path)
+        self.assertEqual(stats["stale"], 1)
+
     def test_orphan_catchall_event_is_a_tickable_row_but_its_mirror_is_not(self):
         # "2022"/"2023" are catch-all folder names (scan.CATCHALLS), but not
         # every folder inside one is a duplicate. An orphan catch-all event
@@ -99,12 +148,23 @@ class TestManifests(fixtures.ArchiveFixture, unittest.TestCase):
                 self.assertIn("'", line, line)
 
     def test_cleanup_script_does_nothing_without_apply(self):
+        # Compare full relative paths, not basenames: a dry run that moved
+        # every file to a different directory while keeping filenames intact
+        # would still pass a basename-only comparison. This is the most
+        # dangerous script in the project, so the guard has to catch a
+        # same-name-different-place move, not just a renamed/deleted one.
         script = os.path.join(self.work, "cleanup.sh")
         manifests.write_cleanup(self.analysis, self.archive_root, script,
                                 os.path.join(self.work, "undo.sh"), "2026-10-05")
-        before = sorted(f for _, _, fs in os.walk(self.archive_root) for f in fs)
+        before = sorted(
+            os.path.relpath(os.path.join(dp, f), self.archive_root)
+            for dp, dn, fs in os.walk(self.archive_root) for f in fs
+        )
         proc = subprocess.run(["bash", script], capture_output=True, text=True)
-        after = sorted(f for _, _, fs in os.walk(self.archive_root) for f in fs)
+        after = sorted(
+            os.path.relpath(os.path.join(dp, f), self.archive_root)
+            for dp, dn, fs in os.walk(self.archive_root) for f in fs
+        )
         self.assertEqual(before, after, "dry run modified the archive")
         self.assertEqual(proc.returncode, 0)
         self.assertIn("dry run", proc.stdout.lower())

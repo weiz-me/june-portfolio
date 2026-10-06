@@ -2,6 +2,7 @@
 import argparse
 import csv
 import os
+import re
 import shlex
 import stat
 import sys
@@ -9,6 +10,25 @@ import sys
 from tools import classify, dupes, eventdata, naming, scan
 
 GB = 1024.0 ** 3
+
+_TICK_ROW = re.compile(r"^\|\s*\[([xX ])\]\s*\|.*\|\s*`([^`]+)`\s*\|\s*$")
+
+
+def _read_ticked_ids(path):
+    """Ids whose row is already ticked `[x]` in an existing manifest at
+    `path`. Re-running the audit is the documented way to confirm the
+    archive hasn't changed (see README/spec), so regenerating this file
+    must never silently erase hours of a non-engineer's manual ticking.
+    Returns an empty set when `path` does not exist yet (first run)."""
+    if not os.path.exists(path):
+        return set()
+    ticked = set()
+    with open(path) as fh:
+        for line in fh:
+            m = _TICK_ROW.match(line.rstrip("\n"))
+            if m and m.group(1).strip().lower() == "x":
+                ticked.add(m.group(2))
+    return ticked
 
 
 def is_removed_duplicate(event, duplicate_keys):
@@ -30,10 +50,22 @@ def is_removed_duplicate(event, duplicate_keys):
 def write_events_manifest(events, analysis, conflicts, duplicate_keys, path,
                           global_dupes=None, empty_months=None):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    previously_ticked = _read_ticked_ids(path)
+    ticked = previously_ticked & {e["id"] for e in events}
+    stale = previously_ticked - ticked
     lines = []
     lines.append("# Event manifest\n")
     lines.append("Tick the events you want in the portfolio gallery, then run")
     lines.append("`python3 -m tools.hydrate --events <id> <id> ...`\n")
+    if previously_ticked:
+        note = ("_Re-run of an existing manifest: %d previously ticked row(s) "
+                "were carried forward by event id." % len(ticked))
+        if stale:
+            note += (" %d ticked id(s) from the old file no longer match any "
+                     "event this run and were dropped: %s."
+                     % (len(stale), ", ".join("`%s`" % s for s in sorted(stale))))
+        note += " New or renamed events start unticked._\n"
+        lines.append(note)
     # `events` includes one record per catch-all mirror folder too (it needs
     # those to compute per-folder photo/byte counts), so the unique-event
     # count June actually cares about excludes only the folders proven to be
@@ -110,7 +142,9 @@ def write_events_manifest(events, analysis, conflicts, duplicate_keys, path,
         lines.append("| pick | date | event | photos | physician | partners | id |")
         lines.append("|---|---|---|---|---|---|---|")
         for e in group:
-            lines.append("| [ ] | %s | %s | %d | %s | %s | `%s` |" % (
+            mark = "x" if e["id"] in ticked else " "
+            lines.append("| [%s] | %s | %s | %d | %s | %s | `%s` |" % (
+                mark,
                 e["iso"] or (str(e["year_num"]) if e["year_num"] else "?"),
                 e["title"].replace("|", "/"),
                 e["photos"],
@@ -122,6 +156,7 @@ def write_events_manifest(events, analysis, conflicts, duplicate_keys, path,
 
     with open(path, "w") as fh:
         fh.write("\n".join(lines) + "\n")
+    return {"carried": len(ticked), "stale": len(stale)}
 
 
 def write_rename_plan(events, duplicate_keys, path):
@@ -158,6 +193,10 @@ if [[ $APPLY -eq 0 ]]; then
   echo "DRY RUN -- nothing will move. Re-run with --apply to act."
 fi
 
+MOVED=0
+SKIPPED=0
+QUEUED={count}
+
 """
 
 _UNDO_HEADER = """#!/usr/bin/env bash
@@ -173,12 +212,20 @@ if [[ $APPLY -eq 0 ]]; then
   echo "DRY RUN -- nothing will move. Re-run with --apply to act."
 fi
 
+MOVED=0
+SKIPPED=0
+QUEUED={count}
+
 """
 
 _FOOTER = """
 if [[ $APPLY -eq 1 ]]; then
-  echo "Moved {count} files into {quarantine_dir}"
+  echo "Moved $MOVED of $QUEUED queued files into {quarantine_dir} ($SKIPPED skipped)"
   echo "Reverse with: bash {undo_name} --apply"
+  if [[ $MOVED -eq 0 && $QUEUED -gt 0 ]]; then
+    echo "error: 0 files moved out of $QUEUED queued -- nothing was quarantined. Is the archive path still correct?" >&2
+    exit 1
+  fi
 else
   echo "{count} files would move. Re-run with --apply."
 fi
@@ -186,7 +233,11 @@ fi
 
 _UNDO_FOOTER = """
 if [[ $APPLY -eq 1 ]]; then
-  echo "Restored {count} files from {quarantine_dir}"
+  echo "Restored $MOVED of $QUEUED queued files from {quarantine_dir} ($SKIPPED skipped)"
+  if [[ $MOVED -eq 0 && $QUEUED -gt 0 ]]; then
+    echo "error: 0 files restored out of $QUEUED queued -- nothing was found in the quarantine folder." >&2
+    exit 1
+  fi
 else
   echo "{count} files would be restored. Re-run with --apply."
 fi
@@ -207,31 +258,47 @@ def _chmod_x(path):
     os.chmod(path, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _move_block(src_abs, dst_abs, rel, verb):
+def _move_block(src_abs, dst_abs, rel, verb, skip_label):
     """One self-contained, fully-quoted guarded move.
 
     Every path is resolved to an absolute path and quoted with shlex.quote
     at generation time -- there is no shell-variable path-building to get
     wrong, and real folder names in this archive contain spaces, '&', '#',
     parentheses and apostrophes.
+
+    In --apply mode this also counts: MOVED increments on every successful
+    `mv` (and echoes it, so a successful move is no longer silent), SKIPPED
+    increments when the source is missing. The footer then reports real
+    totals instead of the queued count. `skip_label` differs by direction
+    -- "already gone" reads as data loss when echoed by the undo script,
+    which means the opposite (the file was never quarantined to begin
+    with), so the two scripts use different wording for the same branch.
     """
     src_q = shlex.quote(src_abs)
     dst_q = shlex.quote(dst_abs)
     dstdir_q = shlex.quote(os.path.dirname(dst_abs))
     rel_q = shlex.quote(rel)
+    done_label_q = shlex.quote("%sd:" % verb)
+    would_label_q = shlex.quote("would %s:" % verb)
+    skip_label_q = shlex.quote("%s:" % skip_label)
     return (
         "if [[ -e %s ]]; then\n"
         "  if [[ $APPLY -eq 1 ]]; then\n"
         "    mkdir -p %s\n"
         "    mv %s %s\n"
+        "    MOVED=$((MOVED + 1))\n"
+        "    printf '%%s %%s\\n' %s %s\n"
         "  else\n"
         "    printf '%%s %%s\\n' %s %s\n"
         "  fi\n"
         "else\n"
-        "  printf 'skip (already gone): %%s\\n' %s\n"
+        "  SKIPPED=$((SKIPPED + 1))\n"
+        "  printf '%%s %%s\\n' %s %s\n"
         "fi\n"
     ) % (src_q, dstdir_q, src_q, dst_q,
-         shlex.quote("would %s:" % verb), rel_q, rel_q)
+         done_label_q, rel_q,
+         would_label_q, rel_q,
+         skip_label_q, rel_q)
 
 
 def write_cleanup(analysis, archive_root, path, undo_path, stamp):
@@ -246,22 +313,24 @@ def write_cleanup(analysis, archive_root, path, undo_path, stamp):
     with open(path, "w") as fh:
         fh.write(_HEADER.format(stamp=stamp, script_name=script_name,
                                 undo_name=undo_name,
-                                quarantine_dir=quarantine_abs))
+                                quarantine_dir=quarantine_abs,
+                                count=len(rels)))
         for rel in rels:
             src_abs = os.path.join(archive_abs, rel)
             dst_abs = os.path.join(quarantine_abs, rel)
-            fh.write(_move_block(src_abs, dst_abs, rel, "move"))
+            fh.write(_move_block(src_abs, dst_abs, rel, "move", "skip (already gone)"))
         fh.write(_FOOTER.format(count=len(rels), quarantine_dir=quarantine_abs,
                                 undo_name=undo_name))
     _chmod_x(path)
 
     with open(undo_path, "w") as fh:
         fh.write(_UNDO_HEADER.format(stamp=stamp, script_name=script_name,
-                                     undo_name=undo_name))
+                                     undo_name=undo_name,
+                                     count=len(rels)))
         for rel in rels:
             src_abs = os.path.join(archive_abs, rel)      # original location
             dst_abs = os.path.join(quarantine_abs, rel)    # quarantined location
-            fh.write(_move_block(dst_abs, src_abs, rel, "restore"))
+            fh.write(_move_block(dst_abs, src_abs, rel, "restore", "skip (not quarantined)"))
         fh.write(_UNDO_FOOTER.format(count=len(rels), quarantine_dir=quarantine_abs))
     _chmod_x(undo_path)
     return len(rels)
@@ -288,9 +357,11 @@ def main(argv=None):
         {"name": e["event"], "iso": e["iso"], "path": e["dir"]}
         for e in events if not is_removed_duplicate(e, duplicate_keys)
     ])
-    write_events_manifest(events, analysis, conflicts, duplicate_keys,
-                          os.path.join(out, "events-manifest.md"),
-                          global_dupes=global_dupes, empty_months=empty_months)
+    manifest_path = os.path.join(out, "events-manifest.md")
+    had_existing = os.path.exists(manifest_path)
+    tick_stats = write_events_manifest(events, analysis, conflicts, duplicate_keys,
+                                       manifest_path,
+                                       global_dupes=global_dupes, empty_months=empty_months)
     write_rename_plan(events, duplicate_keys, os.path.join(out, "rename-plan.csv"))
     moves = write_cleanup(analysis, args.archive,
                           os.path.join(out, "cleanup.sh"),
@@ -307,6 +378,12 @@ def main(argv=None):
              global_dupes["files"], global_dupes["bytes"] / GB))
     print("conflicts    %d" % len(conflicts))
     print("cleanup.sh   %d moves queued (dry run by default)" % moves)
+    if had_existing:
+        print("manifest     re-generated %s: carried forward %d previously "
+              "ticked row(s)%s -- nothing was erased"
+              % (manifest_path, tick_stats["carried"],
+                 (", %d stale tick(s) dropped (event no longer exists this run)"
+                  % tick_stats["stale"]) if tick_stats["stale"] else ""))
     print("\nwrote %s/{inventory.csv,duplicates.csv,events-manifest.md,"
           "rename-plan.csv,cleanup.sh,undo.sh}" % out)
     return 0

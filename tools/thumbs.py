@@ -14,7 +14,6 @@ here, task 13's module next) instead of living in a shared helper.
 """
 import argparse
 import html
-import json
 import os
 import sys
 
@@ -93,7 +92,6 @@ def build(archive, event_ids, thumb_dir, html_path):
 
 
 def render_html(events):
-    data = json.dumps({"events": events}, indent=1)
     groups = []
     for event in events:
         internal = event["category"] == "internal"
@@ -153,13 +151,10 @@ def render_html(events):
 <main>
 %s
 </main>
-<script type="application/json" id="picker-data">
-%s
-</script>
 <script src="picker.js"></script>
 </body>
 </html>
-""" % (filters, "\n".join(groups), data)
+""" % (filters, "\n".join(groups))
 
 
 def main(argv=None):

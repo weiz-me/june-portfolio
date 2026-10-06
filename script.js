@@ -101,6 +101,29 @@ document.querySelectorAll("[data-ba]").forEach((ba) => {
   show(0);
 });
 
+// Events link: data/events.js ships as an empty placeholder until the
+// owner publishes a first batch of photos, and events.html has nothing
+// useful to show until then. Hide every link that points at it -- the nav
+// "Events" item and the "See all events -->" link -- so the site never
+// sends a visitor to an empty page. No build step, no fetch: this only
+// looks at window.GALLERY_DATA, which is already loaded via a plain
+// <script src> before this file runs.
+(function () {
+  const data = window.GALLERY_DATA;
+  const hasEvents = Boolean(data && Array.isArray(data.events) && data.events.length > 0);
+  if (hasEvents) return;
+  document.querySelectorAll('a[href="events.html"], a[href$="/events.html"]')
+    .forEach((a) => {
+      // "See all events -->" lives alone inside <p class="more">, which
+      // carries its own top margin -- hide that wrapper instead of just the
+      // link so no empty gap is left behind. The nav link has siblings, so
+      // hiding the <a> itself is correct there.
+      const parent = a.parentElement;
+      const soleChild = parent && parent.children.length === 1 && parent.classList.contains("more");
+      (soleChild ? parent : a).hidden = true;
+    });
+})();
+
 // Featured event strip on the home page. Falls back to whatever markup is
 // already in [data-featured] when no gallery data has been built yet.
 (function () {

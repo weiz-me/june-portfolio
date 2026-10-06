@@ -1,4 +1,3 @@
-import json
 import os
 import unittest
 from unittest import mock
@@ -72,16 +71,17 @@ class TestThumbs(fixtures.ArchiveFixture, unittest.TestCase):
         self.assertNotIn("<details open", text)
         self.assertIn("Internal / Provider", text)
 
-    def test_html_carries_a_json_payload_the_picker_can_read(self):
+    def test_html_has_no_embedded_json_payload(self):
+        # picker.js reads selection state entirely from data-pick/data-cap/
+        # data-full attributes on the rendered tiles -- it never parses this
+        # payload. Keeping it around was dead weight and an unescaped-
+        # </script> risk for no benefit; it was removed rather than escaped.
         ids = self.ids_for("Rendr Dinner")
         thumbs.build(self.archive_root, ids, self.thumb_dir, self.html)
         with open(self.html) as fh:
             text = fh.read()
-        start = text.index('id="picker-data"')
-        payload = text[text.index(">", start) + 1:text.index("</script>", start)]
-        data = json.loads(payload)
-        self.assertEqual(len(data["events"]), 1)
-        self.assertIn("rel", data["events"][0]["photos"][0])
+        self.assertNotIn("picker-data", text)
+        self.assertNotIn('type="application/json"', text)
 
     def test_reports_unreadable_sources_instead_of_crashing(self):
         bad_dir = os.path.join(self.archive_root, "Event Photos", "2022 Events",

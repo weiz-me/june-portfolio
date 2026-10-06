@@ -138,6 +138,46 @@ class TestWriteCsv(fixtures.ArchiveFixture, unittest.TestCase):
         fixtures.ArchiveFixture.tearDown(self)
         fixtures.cleanup(self.work)
 
+    def test_keeps_names_the_specific_surviving_file_not_an_arbitrary_sibling_folder(self):
+        # The sibling ("original") event can itself span subfolders -- a
+        # catch-all group nests whatever subfolders the real event had.
+        # Naming just "the sibling's first subfolder" (os.walk visits
+        # subfolders alphabetically) for every removed row was wrong for
+        # 236 of 2,548 real rows; this reproduces that exact shape with a
+        # two-subfolder sibling, mirroring the real example from the
+        # review (Alpine Marina / Cold Spring under "0817 Team Building
+        # Event").
+        original = os.path.join(self.archive_root, "Event Photos", "2022 Events",
+                                "0999 Nested Siblings Event")
+        os.makedirs(os.path.join(original, "Alpine Marina"))
+        os.makedirs(os.path.join(original, "Cold Spring"))
+        fixtures.make_seed_image(os.path.join(original, "Alpine Marina", "A.jpg"), "jpg")
+        fixtures.make_seed_image(os.path.join(original, "Cold Spring", "B.jpg"), "jpg")
+        mirror = os.path.join(self.archive_root, "Event Photos", "2022 Events",
+                              "2022", "0999 Nested Siblings Event")
+        shutil.copytree(original, mirror)
+
+        result = dupes.analyze(list(scan.walk(self.archive_root)))
+        path = os.path.join(self.work, "duplicates.csv")
+        dupes.write_csv(result, path)
+        with open(path) as fh:
+            rows = list(csv.DictReader(fh))
+
+        cold_spring_removed = next(
+            r for r in rows
+            if r["verdict"] == "remove" and r["rel"].replace(os.sep, "/").endswith(
+                "0999 Nested Siblings Event/Cold Spring/B.jpg")
+        )
+        self.assertIn("Cold Spring", cold_spring_removed["keeps"])
+        self.assertNotIn("Alpine Marina", cold_spring_removed["keeps"])
+
+        alpine_removed = next(
+            r for r in rows
+            if r["verdict"] == "remove" and r["rel"].replace(os.sep, "/").endswith(
+                "0999 Nested Siblings Event/Alpine Marina/A.jpg")
+        )
+        self.assertIn("Alpine Marina", alpine_removed["keeps"])
+
     def test_writes_a_verdict_per_file(self):
         result = dupes.analyze(list(scan.walk(self.archive_root)))
         path = os.path.join(self.work, "duplicates.csv")

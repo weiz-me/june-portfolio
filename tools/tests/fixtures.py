@@ -1,7 +1,6 @@
 """Synthetic archive for tests. Never touches the real OneDrive tree."""
 import os
 import shutil
-import struct
 import subprocess
 import tempfile
 

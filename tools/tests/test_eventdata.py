@@ -1,3 +1,5 @@
+import os
+import shutil
 import unittest
 
 from tools import eventdata, scan
@@ -78,6 +80,31 @@ class TestCollectEvents(fixtures.ArchiveFixture, unittest.TestCase):
         self.assertEqual(months, [])
         titles = " ".join(e["title"] for e in self.events)
         self.assertNotIn("October Event", titles)
+
+    def test_id_is_stable_whether_or_not_a_catchall_mirror_is_present(self):
+        # "0512 Blood Pressure Seminar Flushing" has a byte-identical mirror
+        # under the "2022" catch-all folder (fixtures.CATCHALLS). Before a
+        # cleanup removes that mirror, both records exist and compete for
+        # the same base id; after, only the real event remains. The id the
+        # real event gets must not depend on which of those two states the
+        # archive is in -- otherwise a selection.json exported before a
+        # cleanup silently stops resolving after one (see I2).
+        with_mirror = self.by_title("Blood Pressure Seminar")
+        self.assertFalse(with_mirror["catchall"])
+        id_with_mirror = with_mirror["id"]
+
+        mirror_dir = os.path.join(self.archive_root, "Event Photos", "2022 Events",
+                                  "2022", "0512 Blood Pressure Seminar Flushing")
+        self.assertTrue(os.path.isdir(mirror_dir))
+        shutil.rmtree(mirror_dir)
+
+        events_without_mirror = eventdata.collect_events(
+            list(scan.walk(self.archive_root)),
+            extra_dirs=eventdata.find_empty_event_dirs(self.archive_root),
+        )
+        without_mirror = next(e for e in events_without_mirror
+                              if "Blood Pressure Seminar" in e["title"])
+        self.assertEqual(without_mirror["id"], id_with_mirror)
 
     def test_nested_empty_event_two_levels_deep_is_still_an_event(self):
         empty_events = eventdata.find_empty_event_dirs(self.archive_root)

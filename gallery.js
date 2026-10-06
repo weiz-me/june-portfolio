@@ -163,7 +163,7 @@
 
     if (events.length === 0) {
       grid.append(el("p", "gal-empty",
-        "Gallery data has not been built yet. Run tools/build_assets.py."));
+        "Event photos are being added — check back soon."));
       return;
     }
 

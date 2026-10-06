@@ -65,11 +65,23 @@ def analyze(rows):
             candidates, key=lambda item: len(g["keys"] & item[1]["keys"])
         )
         shared = g["keys"] & best["keys"]
+        # Map each (name, size) key to the specific surviving file's own
+        # `rel`, not just "a folder belonging to the sibling event" --
+        # the sibling can span multiple subfolders (a catch-all event
+        # group nests whatever subfolders the source folders had), and a
+        # single `os.path.dirname(best["rows"][0]["rel"])` only ever names
+        # one of them. That was wrong for 236 of 2,548 real rows: `keeps`
+        # is the column the archive owner checks to confirm a surviving
+        # copy exists before emptying the quarantine, so it must point at
+        # the file that actually matched, not an arbitrary sibling folder.
+        keeps_by_key = {}
+        for r in best["rows"]:
+            keeps_by_key.setdefault(file_key(r), r["rel"])
         entry = {
             "event": event,
             "year": year,
             "rows": g["rows"],
-            "keeps": os.path.dirname(best["rows"][0]["rel"]),
+            "keeps_by_key": keeps_by_key,
             "shared": len(shared),
         }
         if g["keys"] <= best["keys"]:
@@ -106,11 +118,13 @@ def write_csv(analysis, path):
         writer.writerow(["rel", "verdict", "bytes", "keeps"])
         for entry in analysis["full"]:
             for row in entry["rows"]:
-                writer.writerow([row["rel"], "remove", row["bytes"], entry["keeps"]])
+                keeps = entry["keeps_by_key"][file_key(row)]
+                writer.writerow([row["rel"], "remove", row["bytes"], keeps])
                 written += 1
         for entry in analysis["partial"]:
             for row in entry["dup_rows"]:
-                writer.writerow([row["rel"], "remove", row["bytes"], entry["keeps"]])
+                keeps = entry["keeps_by_key"][file_key(row)]
+                writer.writerow([row["rel"], "remove", row["bytes"], keeps])
                 written += 1
             for row in entry["unique_rows"]:
                 writer.writerow([row["rel"], "keep-unique", row["bytes"], ""])

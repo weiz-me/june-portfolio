@@ -1,4 +1,6 @@
 /* Gallery page. Tokens come from style.css, which loads first. */
+.gal-noscript { margin: 2rem auto; padding: 1rem 1.25rem; background: var(--tint); border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); }
+.gal-noscript a { color: var(--accent); }
 .gal-head { margin-bottom: 1.25rem; }
 .gal-filters { display: flex; flex-direction: column; gap: .5rem; margin: 1rem 0; }
 .gal-bar { display: flex; flex-wrap: wrap; gap: .4rem; }

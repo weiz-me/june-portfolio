@@ -37,7 +37,17 @@ document.querySelectorAll("[data-cap]").forEach((input) => {
 document.querySelectorAll(".tile img").forEach((img) => {
   img.addEventListener("click", (e) => {
     e.preventDefault();
-    window.open("file://" + encodeURI(img.dataset.full), "_blank");
+    // encodeURI deliberately leaves "#" and "?" unescaped (they're valid
+    // URI delimiters), but here the input is a raw filesystem path, not a
+    // URI with an intentional fragment/query -- a literal "#" in a folder
+    // name (224 files across 20 folders in the real archive, e.g. "Rendr
+    // Care #1_11252025") truncates the file:// URL at that point and the
+    // browser never opens the rest of the path. Escape both by hand after
+    // encodeURI so every character in the path is treated as data.
+    const encoded = encodeURI(img.dataset.full)
+      .replace(/#/g, "%23")
+      .replace(/\?/g, "%3F");
+    window.open("file://" + encoded, "_blank");
   });
 });
 

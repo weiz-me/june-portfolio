@@ -83,7 +83,18 @@ def collect_events(rows, extra_dirs=None, tops=("Event Photos",)):
             "rows": [], "dir": folder_rel,
         })
 
-    records.sort(key=lambda e: (e["iso"] or "9999", e["title"].lower()))
+    # Sort catch-all records (catchall=True) after their non-catchall
+    # namesake for any (iso, title) tie, so the real event always claims
+    # the bare id and a duplicate mirror -- if one exists -- always claims
+    # the "-2" suffix. This is what makes ids stable across a cleanup: a
+    # mirror folder getting quarantined and vanishing from the archive
+    # must not change the id the *real* event already has downstream
+    # (manifests, thumbs, published filenames, a human's selection.json).
+    # Without this, id assignment was a race between whichever record this
+    # tuple happened to sort first, with no preference for the legitimate
+    # original -- see tools/tests/test_eventdata.py's
+    # test_id_is_stable_whether_or_not_a_catchall_mirror_is_present.
+    records.sort(key=lambda e: (e["iso"] or "9999", e["title"].lower(), e["catchall"]))
     used = {}
     for record in records:
         base = "%s-%s" % (record["iso"] or (record["year_num"] or "undated"),
