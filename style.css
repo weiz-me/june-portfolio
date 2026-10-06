@@ -229,3 +229,11 @@ figcaption { font-size: .8rem; color: var(--muted); margin-top: .5rem; line-heig
   .ba-pair, .ba-pairs[data-ba-ready] .ba-pair.active { grid-template-columns: 1fr 1fr; }
   .ba-pair img, .ba-pair .slot { aspect-ratio: 1 / 1; }
 }
+
+/* Featured event strip */
+.featured-grid { grid-template-columns: repeat(4, 1fr); }
+.featured-grid figcaption { font-size: .8rem; color: var(--muted); }
+.more { margin-top: 1rem; }
+.more a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.more a:hover { text-decoration: underline; }
+@media (max-width: 900px) { .featured-grid { grid-template-columns: 1fr 1fr; } }

@@ -100,3 +100,39 @@ document.querySelectorAll("[data-ba]").forEach((ba) => {
   wrap.dataset.baReady = "1";
   show(0);
 });
+
+// Featured event strip on the home page. Falls back to whatever markup is
+// already in [data-featured] when no gallery data has been built yet.
+(function () {
+  const host = document.querySelector("[data-featured]");
+  const data = window.GALLERY_DATA;
+  if (!host || !data || !Array.isArray(data.events)) return;
+
+  const featured = [];
+  data.events.forEach((event) =>
+    (event.photos || []).forEach((photo) => {
+      if (photo.featured) featured.push({ event, photo });
+    })
+  );
+  if (featured.length === 0) return;
+
+  host.textContent = "";
+  featured.slice(0, 8).forEach(({ event, photo }) => {
+    const fig = document.createElement("figure");
+    const img = document.createElement("img");
+    img.src = photo.thumb || photo.src;
+    // No width/height attributes: .photos img already fixes a 4:3 box via
+    // aspect-ratio + object-fit, and setting mismatched width/height
+    // attributes (most real photos aren't 4:3) overrides that aspect-ratio
+    // with the photo's raw pixel height, breaking the grid into tall,
+    // misaligned columns.
+    img.alt = photo.caption || event.title;
+    img.loading = "lazy";
+    img.decoding = "async";
+    const cap = document.createElement("figcaption");
+    cap.textContent = photo.caption || event.title;
+    fig.append(img, cap);
+    host.append(fig);
+  });
+  host.classList.add("featured-grid");
+})();
