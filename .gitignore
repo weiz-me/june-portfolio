@@ -2,3 +2,9 @@
 
 # SDD scratch workspace
 .superpowers/
+
+tools/out/
+tools/picker/thumbs/
+tools/picker/index.html
+__pycache__/
+*.pyc
